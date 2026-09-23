@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* ── Brand Colors ── */
+  --color-primary: #0A65CC;
+  --color-primary-hover: #084E9E;
+  --color-primary-light: #E7F0FA;
+  --color-primary-50: #F1F6FD;
+
+  /* ── Neutrals ── */
+  --color-gray-900: #18191C;
+  --color-gray-700: #474C54;
+  --color-gray-600: #5E6670;
+  --color-gray-500: #767F8C;
+  --color-gray-400: #9199A3;
+  --color-gray-300: #BDC4CD;
+  --color-gray-200: #E4E5E8;
+  --color-gray-100: #F1F2F4;
+  --color-gray-50: #F7F7F8;
+
+  /* ── Semantic / Status ── */
+  --color-success: #12B76A;
+  --color-success-light: #E7F6EC;
+  --color-warning: #F79009;
+  --color-warning-light: #FFF6E6;
+  --color-danger: #F04438;
+  --color-danger-light: #FEE4E2;
+  --color-info: #0BA5EC;
+
+  /* ── Surfaces ── */
+  --color-background: #ffffff;
+  --color-foreground: #18191C;
+  --color-surface: #F7F7F8;
+  --color-surface-alt: #F1F2F4;
+  --color-footer-bg: #18191C;
+
+  /* ── Badge Colors ── */
+  --color-badge-fulltime: #E7F0FA;
+  --color-badge-fulltime-text: #0A65CC;
+  --color-badge-contract: #E7F6EC;
+  --color-badge-contract-text: #12B76A;
+  --color-badge-internship: #FFF6E6;
+  --color-badge-internship-text: #F79009;
+  --color-badge-featured: #FFEAE4;
+  --color-badge-featured-text: #E05735;
+
+  /* ── Stars ── */
+  --color-star: #FCAB28;
+
+  /* ── Typography ── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Shadows ── */
+  --shadow-card: 0px 2px 12px rgba(24, 25, 28, 0.06);
+  --shadow-navbar: 0px 1px 2px rgba(24, 25, 28, 0.08);
+  --shadow-elevated: 0px 6px 24px rgba(24, 25, 28, 0.1);
+}
+
+/* ── Base Styles ── */
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Smooth scrolling ── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Focus ring utility ── */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
