@@ -13,6 +13,14 @@ import {
   FILE_UPLOAD,
   SIGNALR,
   STORAGE_KEYS,
+  WORKER_CATEGORIES,
+  WORKER_CATEGORY_LABELS,
+  WORKER_CATEGORIES_LIST,
+  BOOKING_STATUSES,
+  BOOKING_STATUS_LABELS,
+  BOOKING_STATUSES_LIST,
+  STALE_TIME,
+  DEBOUNCE_MS,
 } from '@/lib/constants';
 
 describe('Route Constants', () => {
@@ -317,6 +325,10 @@ describe('Storage Keys Constants', () => {
       expect(STORAGE_KEYS.AUTH_TOKEN).toBe('skilld_auth_token');
     });
 
+    it('should have refresh token key', () => {
+      expect(STORAGE_KEYS.REFRESH_TOKEN).toBe('skilld_refresh_token');
+    });
+
     it('should have user preferences key', () => {
       expect(STORAGE_KEYS.USER_PREFERENCES).toBe('skilld_user_prefs');
     });
@@ -346,3 +358,99 @@ describe('Storage Keys Constants', () => {
     });
   });
 });
+
+describe('Worker Categories Constants', () => {
+  it('should define all core skilled service categories', () => {
+    expect(WORKER_CATEGORIES.PLUMBING).toBe('plumbing');
+    expect(WORKER_CATEGORIES.ELECTRICAL).toBe('electrical');
+    expect(WORKER_CATEGORIES.CARPENTRY).toBe('carpentry');
+    expect(WORKER_CATEGORIES.PAINTING).toBe('painting');
+    expect(WORKER_CATEGORIES.HVAC).toBe('hvac');
+    expect(WORKER_CATEGORIES.CLEANING).toBe('cleaning');
+    expect(WORKER_CATEGORIES.HANDYMAN).toBe('handyman');
+    expect(WORKER_CATEGORIES.PROGRAMMING).toBe('programming');
+    expect(WORKER_CATEGORIES.DESIGN).toBe('design');
+  });
+
+  it('should have unique values across all categories', () => {
+    const values = Object.values(WORKER_CATEGORIES);
+    const uniqueValues = new Set(values);
+    expect(values.length).toBe(uniqueValues.size);
+    expect(WORKER_CATEGORIES_LIST).toEqual(values);
+  });
+
+  it('should have corresponding labels for every category', () => {
+    Object.values(WORKER_CATEGORIES).forEach((category) => {
+      expect(WORKER_CATEGORY_LABELS[category]).toBeDefined();
+      expect(typeof WORKER_CATEGORY_LABELS[category]).toBe('string');
+      expect(WORKER_CATEGORY_LABELS[category].length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('Booking Statuses Constants', () => {
+  it('should define all lifecycle states for bookings', () => {
+    expect(BOOKING_STATUSES.PENDING).toBe('pending');
+    expect(BOOKING_STATUSES.ACCEPTED).toBe('accepted');
+    expect(BOOKING_STATUSES.REJECTED).toBe('rejected');
+    expect(BOOKING_STATUSES.IN_PROGRESS).toBe('in_progress');
+    expect(BOOKING_STATUSES.COMPLETED).toBe('completed');
+    expect(BOOKING_STATUSES.CANCELLED).toBe('cancelled');
+    expect(BOOKING_STATUSES.DISPUTED).toBe('disputed');
+    expect(BOOKING_STATUSES.REFUNDED).toBe('refunded');
+  });
+
+  it('should have unique values across all booking statuses', () => {
+    const values = Object.values(BOOKING_STATUSES);
+    const uniqueValues = new Set(values);
+    expect(values.length).toBe(uniqueValues.size);
+    expect(BOOKING_STATUSES_LIST).toEqual(values);
+  });
+
+  it('should have readable labels for every booking status', () => {
+    Object.values(BOOKING_STATUSES).forEach((status) => {
+      expect(BOOKING_STATUS_LABELS[status]).toBeDefined();
+      expect(typeof BOOKING_STATUS_LABELS[status]).toBe('string');
+    });
+  });
+});
+
+describe('Stale Time Constants (React Query)', () => {
+  it('should define standardized cache duration tiers', () => {
+    expect(STALE_TIME.INSTANT).toBe(0);
+    expect(STALE_TIME.SHORT).toBe(30000); // 30s
+    expect(STALE_TIME.DEFAULT).toBe(60000); // 1 min
+    expect(STALE_TIME.MEDIUM).toBe(300000); // 5 min
+    expect(STALE_TIME.LONG).toBe(900000); // 15 min
+    expect(STALE_TIME.VERY_LONG).toBe(3600000); // 1 hour
+    expect(STALE_TIME.INFINITY).toBe(Infinity);
+  });
+
+  it('should have strictly increasing durations for tiered caching', () => {
+    expect(STALE_TIME.INSTANT).toBeLessThan(STALE_TIME.SHORT);
+    expect(STALE_TIME.SHORT).toBeLessThan(STALE_TIME.DEFAULT);
+    expect(STALE_TIME.DEFAULT).toBeLessThan(STALE_TIME.MEDIUM);
+    expect(STALE_TIME.MEDIUM).toBeLessThan(STALE_TIME.LONG);
+    expect(STALE_TIME.LONG).toBeLessThan(STALE_TIME.VERY_LONG);
+    expect(STALE_TIME.VERY_LONG).toBeLessThan(STALE_TIME.INFINITY);
+  });
+});
+
+describe('Debounce Delays Constants', () => {
+  it('should define standardized debounce timings in milliseconds', () => {
+    expect(DEBOUNCE_MS.DEFAULT).toBe(300);
+    expect(DEBOUNCE_MS.SEARCH).toBe(350);
+    expect(DEBOUNCE_MS.LOCATION).toBe(500);
+    expect(DEBOUNCE_MS.FILTER).toBe(250);
+    expect(DEBOUNCE_MS.AUTOSAVE).toBe(1000);
+    expect(DEBOUNCE_MS.WINDOW_EVENT).toBe(150);
+  });
+
+  it('should all be positive integers', () => {
+    Object.values(DEBOUNCE_MS).forEach((ms) => {
+      expect(Number.isInteger(ms)).toBe(true);
+      expect(ms).toBeGreaterThan(0);
+    });
+  });
+});
+
