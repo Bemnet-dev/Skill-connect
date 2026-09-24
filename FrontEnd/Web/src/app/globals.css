@@ -1,7 +1,40 @@
 @import "tailwindcss";
+@config "../../tailwind.config.ts";
 
 @theme inline {
-  /* ── Brand Colors ── */
+  /* ── Brand Design Tokens (Single Source of Truth) ── */
+  --color-brand-navy: #0A1B39;
+  --color-brand-navy-dark: #001738;
+  --color-brand-navy-light: #E7F0FA;
+  --color-brand-navy-primary: #0A65CC;
+  --color-brand-navy-hover: #084E9E;
+  --color-brand-navy-50: #F0F5FA;
+  --color-brand-navy-100: #E7F0FA;
+  --color-brand-navy-200: #CEE0F5;
+  --color-brand-navy-300: #7EADE6;
+  --color-brand-navy-400: #3D82D7;
+  --color-brand-navy-500: #0A65CC;
+  --color-brand-navy-600: #084E9E;
+  --color-brand-navy-700: #0D233A;
+  --color-brand-navy-800: #0A1B39;
+  --color-brand-navy-900: #001738;
+
+  --color-brand-teal: #0BA5EC;
+  --color-brand-teal-accent: #14B8A6;
+  --color-brand-teal-light: #E0F2FE;
+  --color-brand-teal-dark: #0369A1;
+  --color-brand-teal-50: #F0FDFA;
+  --color-brand-teal-100: #E0F2FE;
+  --color-brand-teal-200: #BAE6FD;
+  --color-brand-teal-300: #7DD3FC;
+  --color-brand-teal-400: #38BDF8;
+  --color-brand-teal-500: #0BA5EC;
+  --color-brand-teal-600: #0284C7;
+  --color-brand-teal-700: #0369A1;
+  --color-brand-teal-800: #075985;
+  --color-brand-teal-900: #0C4A6E;
+
+  /* ── Brand Colors / Aliases ── */
   --color-primary: #0A65CC;
   --color-primary-hover: #084E9E;
   --color-primary-light: #E7F0FA;
