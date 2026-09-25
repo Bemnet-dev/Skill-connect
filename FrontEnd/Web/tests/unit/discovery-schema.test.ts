@@ -6,9 +6,11 @@ import {
   paginatedSearchResultsSchema,
   searchOriginSchema,
   searchAvailabilitySchema,
+  portfolioItemSchema,
   type SearchFilters,
   type WorkerSummary,
   type SearchResults,
+  type PortfolioItem,
 } from "@/features/discovery/schema";
 
 describe("Discovery Feature Schemas (src/features/discovery/schema.ts)", () => {
@@ -134,6 +136,33 @@ describe("Discovery Feature Schemas (src/features/discovery/schema.ts)", () => {
     });
   });
 
+  describe("portfolioItemSchema", () => {
+    it("validates an object portfolio item with details and image", () => {
+      const item: PortfolioItem = {
+        id: "port_1",
+        title: "200A Electrical Panel Upgrade",
+        description: "Replaced outdated fuse box with modern breaker panel",
+        imageUrl: "https://example.com/panel.jpg",
+        image: "https://example.com/panel.jpg",
+        url: "https://example.com/project/panel",
+        category: "electrical",
+        completedAt: "2026-08-15",
+      };
+
+      const parsed = portfolioItemSchema.parse(item);
+      expect(parsed.id).toBe("port_1");
+      expect(parsed.title).toBe("200A Electrical Panel Upgrade");
+      expect(parsed.description).toBe("Replaced outdated fuse box with modern breaker panel");
+      expect(parsed.imageUrl).toBe("https://example.com/panel.jpg");
+      expect(parsed.category).toBe("electrical");
+    });
+
+    it("pre-processes a raw media URL string into a portfolio item object", () => {
+      const parsed = portfolioItemSchema.parse("https://example.com/work-photo.png");
+      expect(parsed.imageUrl).toBe("https://example.com/work-photo.png");
+    });
+  });
+
   describe("workerSummarySchema (Search Result Card)", () => {
     it("validates a full worker summary payload with all card attributes", () => {
       const fullWorker: WorkerSummary = {
@@ -142,8 +171,10 @@ describe("Discovery Feature Schemas (src/features/discovery/schema.ts)", () => {
         name: "Dawit Haile",
         fullName: "Dawit Haile",
         headline: "Master Electrician & Wiring Specialist",
+        bio: "Certified master electrician with 12+ years of residential and commercial experience in Addis Ababa.",
         category: "electrical",
         skills: ["Commercial Wiring", "Circuit Breakers", "Solar Installations"],
+        languages: ["English", "Amharic", "Oromo"],
         rating: 4.85,
         reviewCount: 94,
         hourlyRate: 75,
@@ -151,6 +182,7 @@ describe("Discovery Feature Schemas (src/features/discovery/schema.ts)", () => {
         currency: "USD",
         distanceKm: 3.4,
         distance: 3.4,
+        serviceRadiusKm: 30,
         location: "Bole Medhanealem",
         isVerified: true,
         availability: "available_now",
@@ -159,23 +191,40 @@ describe("Discovery Feature Schemas (src/features/discovery/schema.ts)", () => {
         responseTimeMinutes: 15,
         avatarUrl: "https://example.com/avatar.jpg",
         image: "https://example.com/avatar.jpg",
+        portfolio: [
+          {
+            id: "p_1",
+            title: "Villa Solar Installation",
+            imageUrl: "https://example.com/solar.jpg",
+          },
+          "https://example.com/generator-backup.jpg",
+        ],
         featured: true,
       };
 
       const parsed = workerSummarySchema.parse(fullWorker);
       expect(parsed.id).toBe("wkr_101");
       expect(parsed.name).toBe("Dawit Haile");
+      expect(parsed.headline).toBe("Master Electrician & Wiring Specialist");
+      expect(parsed.bio).toBe(
+        "Certified master electrician with 12+ years of residential and commercial experience in Addis Ababa."
+      );
       expect(parsed.category).toBe("electrical");
       expect(parsed.skills).toHaveLength(3);
+      expect(parsed.languages).toEqual(["English", "Amharic", "Oromo"]);
       expect(parsed.rating).toBe(4.85);
       expect(parsed.reviewCount).toBe(94);
       expect(parsed.hourlyRate).toBe(75);
       expect(parsed.distanceKm).toBe(3.4);
+      expect(parsed.serviceRadiusKm).toBe(30);
       expect(parsed.isVerified).toBe(true);
       expect(parsed.availability).toBe("available_now");
       expect(parsed.isAvailable).toBe(true);
       expect(parsed.completedJobsCount).toBe(142);
       expect(parsed.responseTimeMinutes).toBe(15);
+      expect(parsed.portfolio).toHaveLength(2);
+      expect(parsed.portfolio[0].title).toBe("Villa Solar Installation");
+      expect(parsed.portfolio[1].imageUrl).toBe("https://example.com/generator-backup.jpg");
       expect(parsed.featured).toBe(true);
     });
 
@@ -190,6 +239,10 @@ describe("Discovery Feature Schemas (src/features/discovery/schema.ts)", () => {
       expect(parsed.id).toBe("wkr_min_1");
       expect(parsed.name).toBe("Almaz Kebede");
       expect(parsed.category).toBe("plumbing");
+      expect(parsed.bio).toBeUndefined();
+      expect(parsed.serviceRadiusKm).toBeUndefined();
+      expect(parsed.languages).toEqual([]);
+      expect(parsed.portfolio).toEqual([]);
       expect(parsed.rating).toBe(0);
       expect(parsed.reviewCount).toBe(0);
       expect(parsed.skills).toEqual([]);

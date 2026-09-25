@@ -7,6 +7,7 @@ import {
   paginatedSearchResultsSchema,
   searchOriginSchema,
   searchAvailabilitySchema,
+  portfolioItemSchema,
   // API Functions
   searchWorkers,
   buildSearchQueryParams,
@@ -22,6 +23,7 @@ import {
   type PaginatedSearchResults,
   type SearchOrigin,
   type SearchAvailability,
+  type PortfolioItem,
   type UseSearchWorkersOptions,
   type WorkerCardProps,
   type ResultsMapProps,
@@ -47,6 +49,9 @@ describe("Discovery Feature Barrel (src/features/discovery/index.ts)", () => {
 
       expect(searchAvailabilitySchema).toBeDefined();
       expect(typeof searchAvailabilitySchema.parse).toBe("function");
+
+      expect(portfolioItemSchema).toBeDefined();
+      expect(typeof portfolioItemSchema.parse).toBe("function");
     });
 
     it("correctly parses inputs through schemas imported from barrel", () => {
@@ -92,11 +97,19 @@ describe("Discovery Feature Barrel (src/features/discovery/index.ts)", () => {
       const origin: SearchOrigin = { latitude: 9.03, longitude: 38.74 };
       const availability: SearchAvailability = "available_now";
       const filters: SearchFilters = { category: "plumbing", origin, availability };
+      const portfolioItem: PortfolioItem = {
+        id: "port_1",
+        title: "Kitchen Remodel",
+        imageUrl: "https://example.com/pic.jpg",
+      };
       const worker: WorkerSummary = {
         id: "wkr_type_1",
         name: "Test Worker",
+        bio: "Experienced technician",
         category: "plumbing",
         skills: ["Pipes"],
+        languages: ["English"],
+        serviceRadiusKm: 25,
         rating: 4.8,
         reviewCount: 12,
         hourlyRate: 50,
@@ -105,6 +118,7 @@ describe("Discovery Feature Barrel (src/features/discovery/index.ts)", () => {
         availability: "available_now",
         isAvailable: true,
         completedJobsCount: 20,
+        portfolio: [portfolioItem],
       };
       const results: SearchResults = [worker];
       const paginated: PaginatedSearchResults = {
@@ -120,6 +134,7 @@ describe("Discovery Feature Barrel (src/features/discovery/index.ts)", () => {
       const mapProps: ResultsMapProps = { workers: results };
 
       expect(filters).toBeDefined();
+      expect(portfolioItem).toBeDefined();
       expect(worker).toBeDefined();
       expect(results).toBeDefined();
       expect(paginated).toBeDefined();

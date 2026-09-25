@@ -9,6 +9,7 @@ export type {
   SearchOrigin,
   SearchAvailability,
   SearchFilters,
+  PortfolioItem,
   WorkerSummary,
   SearchResults,
   PaginatedSearchResults,

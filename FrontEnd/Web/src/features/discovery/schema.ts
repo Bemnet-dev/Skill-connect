@@ -92,7 +92,39 @@ export const searchFiltersSchema = z.object({
 
 export type SearchFilters = z.infer<typeof searchFiltersSchema>;
 
-// ── 4. Worker Summary Schema (Search Result Card) ─────────────────────────────
+// ── 4. Portfolio Item Schema ─────────────────────────────────────────────────
+
+/**
+ * Validates an individual portfolio showcase item or work sample.
+ * Accepts either an object payload with title/description/media, or a raw media URL string.
+ */
+export const portfolioItemSchema = z.preprocess(
+  (val) => (typeof val === "string" ? { imageUrl: val, image: val, url: val } : val),
+  z
+    .object({
+      /** Unique identifier for the portfolio showcase item */
+      id: z.string().optional(),
+      /** Title or project caption */
+      title: z.string().optional(),
+      /** Detailed description of the completed work */
+      description: z.string().nullish(),
+      /** Image or preview media URL showcasing the completed work */
+      imageUrl: z.string().nullish(),
+      /** Image URL alias for Next.js Image compatibility */
+      image: z.string().nullish(),
+      /** External project link or reference URL */
+      url: z.string().nullish(),
+      /** Category or specialty tag associated with this portfolio entry */
+      category: z.string().nullish(),
+      /** Completion timestamp or date string */
+      completedAt: z.string().nullish(),
+    })
+    .passthrough()
+);
+
+export type PortfolioItem = z.infer<typeof portfolioItemSchema>;
+
+// ── 5. Worker Summary Schema (Search Result Card) ─────────────────────────────
 
 /**
  * Validates the worker profile summary payload rendered by search-result cards
@@ -114,10 +146,14 @@ export const workerSummarySchema = z
     image: z.string().nullish(),
     /** Short professional headline / tagline (e.g. "Licensed Master Electrician") */
     headline: z.string().nullish(),
+    /** Detailed professional biography and experience summary */
+    bio: z.string().nullish(),
     /** Primary service category */
     category: z.string().min(1, "Worker category is required"),
     /** Skill tags displayed on the card */
     skills: z.array(z.string()).default([]),
+    /** Spoken and written languages (e.g. ['English', 'Amharic']) */
+    languages: z.array(z.string()).default([]),
     /** Average review rating (0.0 to 5.0) */
     rating: z.coerce.number().min(0).max(5).default(0),
     /** Total count of client reviews */
@@ -132,6 +168,8 @@ export const workerSummarySchema = z
     distanceKm: z.coerce.number().nonnegative().nullish(),
     /** Distance alias */
     distance: z.coerce.number().nonnegative().nullish(),
+    /** Service delivery radius in kilometers */
+    serviceRadiusKm: z.coerce.number().nonnegative().nullish(),
     /** Human-readable location or neighborhood label */
     location: z.string().nullish(),
     /** Identity verification badge status */
@@ -146,6 +184,8 @@ export const workerSummarySchema = z
     completedJobsCount: z.coerce.number().int().nonnegative().default(0),
     /** Average response time in minutes */
     responseTimeMinutes: z.coerce.number().int().nonnegative().nullish(),
+    /** Portfolio gallery showcase items or work samples */
+    portfolio: z.array(portfolioItemSchema).default([]),
     /** Whether this worker is featured or highlighted */
     featured: z.boolean().optional().default(false),
   })

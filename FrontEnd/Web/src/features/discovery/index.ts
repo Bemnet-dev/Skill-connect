@@ -36,6 +36,7 @@ export {
   paginatedSearchResultsSchema,
   searchOriginSchema,
   searchAvailabilitySchema,
+  portfolioItemSchema,
 } from "./schema";
 
 // ── 2. API Functions ──────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ export type {
   PaginatedSearchResults,
   SearchOrigin,
   SearchAvailability,
+  PortfolioItem,
 } from "./schema";
 
 export type {
