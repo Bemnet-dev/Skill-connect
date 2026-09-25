@@ -48,3 +48,29 @@ if (typeof (global as any).fetch === 'undefined') {
   if (typeof window !== 'undefined') (window as any).fetch = defaultFetch;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+// Global mock for next/navigation in test environment
+jest.mock('next/navigation', () => {
+  const mockPush = jest.fn();
+  const mockReplace = jest.fn();
+  const mockRefresh = jest.fn();
+  const mockBack = jest.fn();
+  const mockForward = jest.fn();
+  const mockPrefetch = jest.fn();
+
+  return {
+    useRouter: () => ({
+      push: mockPush,
+      replace: mockReplace,
+      refresh: mockRefresh,
+      back: mockBack,
+      forward: mockForward,
+      prefetch: mockPrefetch,
+    }),
+    usePathname: () => '/dashboard',
+    useSearchParams: () => new URLSearchParams(),
+    useParams: () => ({}),
+    redirect: jest.fn(),
+    notFound: jest.fn(),
+  };
+});
