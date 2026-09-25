@@ -1,14 +1,82 @@
-// Barrel export for auth feature module
-// Re-exports all types, schemas, API functions, and hooks
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Auth Feature Public API Barrel
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Canonical single import path for the authentication feature module:
+ * - Schemas: loginSchema, verifyOtpSchema, otpInputSchema, sessionSchema,
+ *            userSchema, sessionInfoSchema, userRoleSchema
+ * - API: requestOtp, verifyOtp, logout
+ * - Hooks: useLogin, useVerifyOtp, useAuth
+ * - Types: LoginInput, VerifyOtpInput, SessionResponse, AuthUser, User,
+ *          SessionInfo, UserRole, Permission, RequestOtpResponse,
+ *          UseLoginOptions, LoginVariables, UseVerifyOtpOptions,
+ *          VerifyOtpVariables, UseAuthReturn
+ *
+ * @example
+ * ```ts
+ * import {
+ *   loginSchema,
+ *   verifyOtpSchema,
+ *   sessionSchema,
+ *   requestOtp,
+ *   verifyOtp,
+ *   logout,
+ *   useLogin,
+ *   useVerifyOtp,
+ *   useAuth,
+ *   type AuthUser,
+ *   type SessionResponse,
+ *   type UseAuthReturn,
+ * } from "@/features/auth";
+ * ```
+ */
 
-// Re-export types
-export * from './types';
+// ── 1. Validation Schemas ─────────────────────────────────────────────────────
+export {
+  loginSchema,
+  verifyOtpSchema,
+  otpInputSchema,
+  sessionSchema,
+  userSchema,
+  sessionInfoSchema,
+  userRoleSchema,
+} from "./schema";
 
-// Re-export schemas
-export * from './schema';
+// ── 2. API Functions ──────────────────────────────────────────────────────────
+export {
+  requestOtp,
+  verifyOtp,
+  logout,
+} from "./api";
 
-// Re-export API functions
-export * from './api';
+// ── 3. React Hooks ────────────────────────────────────────────────────────────
+export {
+  useLogin,
+  useVerifyOtp,
+  useAuth,
+} from "./hooks";
 
-// Re-export hooks
-export * from './hooks';
+// ── 4. Type Definitions & Inferred Schemas ────────────────────────────────────
+export type {
+  LoginInput,
+  VerifyOtpInput,
+  SessionResponse,
+  AuthUser,
+  SessionInfo,
+  UserRole,
+} from "./schema";
+
+export type { RequestOtpResponse } from "./api";
+
+export type {
+  UseLoginOptions,
+  LoginVariables,
+  UseVerifyOtpOptions,
+  VerifyOtpVariables,
+  UseAuthReturn,
+} from "./hooks";
+
+export type {
+  User,
+  Permission,
+} from "@/state/store/authStore";
