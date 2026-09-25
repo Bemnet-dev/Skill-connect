@@ -1,4 +1,4 @@
-import { createAuthClient } from "better-auth/client";
+import { createAuthClient } from "better-auth/react";
 import { jwtClient } from "better-auth/client/plugins";
 
 /**
@@ -9,6 +9,7 @@ import { jwtClient } from "better-auth/client/plugins";
  * current JWTs to authenticate against the C# backend API.
  *
  * Better Auth handles session refresh, cookie caching, and rotation internally.
+ * In React components, useSession() provides reactive session state.
  */
 export const authClient = createAuthClient({
   baseURL:
@@ -21,5 +22,7 @@ export const authClient = createAuthClient({
     customFetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
   },
 });
+
+export const { useSession, getSession, signIn, signUp, signOut } = authClient;
 
 export default authClient;
