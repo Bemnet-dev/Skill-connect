@@ -1,4 +1,15 @@
-// Type definitions for auth feature
-// TODO: Add actual types in future phases
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Auth Feature Type Definitions
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Re-exports inferred schema types and defines auth domain models.
+ */
 
-export {};
+export type {
+  LoginInput,
+  VerifyOtpInput,
+  AuthUser,
+  SessionInfo,
+  SessionResponse,
+  UserRole,
+} from "./schema";

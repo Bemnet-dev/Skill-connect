@@ -1,5 +1,8 @@
 process.env.NEXT_PUBLIC_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001';
 process.env.NEXT_PUBLIC_SIGNALR_HUB_URL = process.env.NEXT_PUBLIC_SIGNALR_HUB_URL || 'http://localhost:5001/hubs/realtime';
+process.env.NEXT_PUBLIC_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
+process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || 'development-secret-skill-connect-auth-token-32-chars-minimum';
 
 import nextJest from "next/jest.js";
 const createJestConfig = nextJest({ dir: "./" });
@@ -17,7 +20,7 @@ const jestConfig = async () => {
     "^@/(.*)$": "<rootDir>/src/$1",
   };
   config.transformIgnorePatterns = [
-    "[\\\\/]node_modules[\\\\/](?!(@better-auth|better-auth|nanostores|better-call|better-fetch|@noble|jose|rou3|kysely)[\\\\/])",
+    "[\\\\/]node_modules[\\\\/](?!(@better-auth|better-auth|@t3-oss|nanostores|better-call|better-fetch|@noble|jose|rou3|kysely)[\\\\/])",
   ];
   return config;
 };
