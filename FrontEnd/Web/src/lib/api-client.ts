@@ -1,3 +1,4 @@
+import { authClient } from "@/lib/auth-client";
 import { API_TIMEOUTS, STORAGE_KEYS } from "@/lib/constants";
 
 /**
@@ -111,7 +112,7 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   skipAuth?: boolean;
 
   /**
-   * Skip automatic silent refresh on 401 Unauthorized
+   * Skip automatic token re-ask/retry on 401 Unauthorized
    */
   skipAuthRefresh?: boolean;
 
@@ -121,7 +122,7 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   baseUrl?: string;
 
   /**
-   * Internal retry guard to ensure 401 refresh is attempted at most once
+   * Internal retry guard to ensure 401 token re-ask is attempted at most once
    */
   _retry?: boolean;
 }
@@ -194,95 +195,122 @@ export function clearAuthTokens(): void {
 }
 
 /**
- * Custom refresh handler type to allow pluggable auth store integration
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Better Auth Client Token Resolution & 401 Re-asking
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Before each request, apiClient asks Better Auth's client for the current JWT.
+ * Better Auth handles session refresh internally via its cookie session lifecycle.
+ * On a 401 from the C# API, apiClient re-asks Better Auth for a fresh token once,
+ * then gives up.
  */
-export type CustomRefreshHandler = () => Promise<string | null>;
-let customRefreshHandler: CustomRefreshHandler | null = null;
+export type BetterAuthTokenResolver = (options?: {
+  forceRefresh?: boolean;
+}) => Promise<string | null>;
 
-export function setCustomRefreshHandler(
-  handler: CustomRefreshHandler | null
+let customTokenResolver: BetterAuthTokenResolver | null = null;
+let activeAuthClient = authClient;
+
+/**
+ * Allows registering a custom token resolver (e.g. for testing or external mocks)
+ */
+export function setBetterAuthTokenResolver(
+  resolver: BetterAuthTokenResolver | null
 ): void {
-  customRefreshHandler = handler;
+  customTokenResolver = resolver;
 }
 
 /**
- * ─────────────────────────────────────────────────────────────────────────────
- * Concurrency-Safe Silent Token Refresh
- * ─────────────────────────────────────────────────────────────────────────────
- * Multiple concurrent 401s reuse a single pending refresh promise to avoid
- * duplicate refresh calls and token rotation race conditions.
+ * Allows overriding or mocking the Better Auth client instance
  */
-let refreshPromise: Promise<string | null> | null = null;
-const REFRESH_ENDPOINT = "/api/v1/auth/refresh";
+export function setBetterAuthClient(
+  client: typeof authClient
+): void {
+  activeAuthClient = client;
+}
 
-async function performSilentRefresh(): Promise<string | null> {
-  // If an external auth store (e.g. authStore) provided a custom handler, delegate to it
-  if (customRefreshHandler) {
+// Backward-compatible alias for existing callers
+export const setCustomRefreshHandler = setBetterAuthTokenResolver;
+export type CustomRefreshHandler = BetterAuthTokenResolver;
+
+/**
+ * Asks Better Auth's client for the current JWT.
+ * Better Auth manages session refresh internally.
+ */
+export async function getBetterAuthJwt(options?: {
+  forceRefresh?: boolean;
+}): Promise<string | null> {
+  // If an explicit resolver is configured, delegate to it
+  if (customTokenResolver) {
     try {
-      const newToken = await customRefreshHandler();
-      if (newToken) setAuthToken(newToken);
-      return newToken;
+      const token = await customTokenResolver(options);
+      if (token) {
+        setAuthToken(token);
+        return token;
+      }
+      return null;
     } catch {
-      clearAuthTokens();
       return null;
     }
   }
-
-  const refreshToken = getRefreshToken();
-  const baseUrl = getApiBaseUrl();
-  const refreshUrl = `${baseUrl}${REFRESH_ENDPOINT}`;
 
   try {
-    const response = await fetch(refreshUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        refreshToken: refreshToken || undefined,
-      }),
-    });
-
-    if (!response.ok) {
-      clearAuthTokens();
-      return null;
+    // Better Auth client provides current JWT via the jwtClient plugin
+    const { data, error } = await activeAuthClient.token();
+    if (!error && data?.token) {
+      setAuthToken(data.token);
+      return data.token;
     }
-
-    const data = await response.json().catch(() => null);
-    const newAccessToken =
-      data?.accessToken ||
-      data?.token ||
-      data?.data?.accessToken ||
-      data?.data?.token;
-    const newRefreshToken =
-      data?.refreshToken || data?.data?.refreshToken;
-
-    if (newAccessToken && typeof newAccessToken === "string") {
-      setAuthToken(newAccessToken);
-      if (newRefreshToken && typeof newRefreshToken === "string") {
-        setRefreshToken(newRefreshToken);
-      }
-      return newAccessToken;
-    }
-
-    clearAuthTokens();
-    return null;
   } catch {
-    clearAuthTokens();
-    return null;
+    // Better Auth client error or unauthenticated
   }
+
+  // Fallback to in-memory/localStorage token if available
+  return getAuthToken();
 }
 
-export async function silentRefresh(): Promise<string | null> {
-  if (!refreshPromise) {
-    refreshPromise = performSilentRefresh().finally(() => {
-      refreshPromise = null;
+/**
+ * Concurrency-safe token refresh:
+ * Multiple concurrent 401s from the C# API reuse a single pending re-ask promise
+ * to avoid duplicate token requests and race conditions.
+ */
+let reAskPromise: Promise<string | null> | null = null;
+
+export async function reAskBetterAuthToken(): Promise<string | null> {
+  if (!reAskPromise) {
+    reAskPromise = (async () => {
+      try {
+        if (customTokenResolver) {
+          const freshToken = await customTokenResolver({ forceRefresh: true });
+          if (freshToken) {
+            setAuthToken(freshToken);
+            return freshToken;
+          }
+          clearAuthTokens();
+          return null;
+        }
+
+        // Re-ask Better Auth client for a fresh JWT
+        const { data, error } = await activeAuthClient.token();
+        if (!error && data?.token) {
+          setAuthToken(data.token);
+          return data.token;
+        }
+
+        clearAuthTokens();
+        return null;
+      } catch {
+        clearAuthTokens();
+        return null;
+      }
+    })().finally(() => {
+      reAskPromise = null;
     });
   }
-  return refreshPromise;
+  return reAskPromise;
 }
+
+// Backward-compatible alias for existing consumers
+export const silentRefresh = reAskBetterAuthToken;
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -386,9 +414,9 @@ async function request<T = unknown>(
     headers.set("Accept", "application/json");
   }
 
-  // 1. Attach Auth Header if enabled
+  // 1. Ask Better Auth's client for current JWT and attach as Bearer token
   if (!skipAuth && !headers.has("Authorization")) {
-    const token = getAuthToken();
+    const token = await getBetterAuthJwt();
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
@@ -442,27 +470,23 @@ async function request<T = unknown>(
 
     clearTimeout(timeoutId);
 
-    // 4. Handle 401 Unauthorized with Silent Refresh (retry at most once)
-    const isRefreshPath =
-      path.includes(REFRESH_ENDPOINT) || url.includes(REFRESH_ENDPOINT);
+    // 4. On a 401 from the C# API, re-ask Better Auth for a fresh token once, then give up
+    if (response.status === 401 && !_retry && !skipAuthRefresh) {
+      const freshToken = await reAskBetterAuthToken();
 
-    if (
-      response.status === 401 &&
-      !_retry &&
-      !skipAuthRefresh &&
-      !isRefreshPath
-    ) {
-      const newToken = await silentRefresh();
+      if (freshToken) {
+        // Retry the original request once with the refreshed Bearer token
+        const retryHeaders = new Headers(customHeaders);
+        retryHeaders.set("Authorization", `Bearer ${freshToken}`);
 
-      if (newToken) {
-        // Retry the original request once with new token
         return await request<T>(path, {
           ...options,
+          headers: retryHeaders,
           _retry: true,
         });
       }
 
-      // Refresh failed or returned null — throw typed 401 ApiError
+      // Re-asking Better Auth gave no token — give up and throw typed 401 ApiError
       throw new ApiError({
         message: "Session expired or unauthorized. Please log in again.",
         status: 401,
@@ -472,7 +496,7 @@ async function request<T = unknown>(
       });
     }
 
-    // 5. Handle non-2xx Failure Responses
+    // 5. Handle non-2xx Failure Responses (including repeated 401 when _retry is true)
     if (!response.ok) {
       let errorData: ApiProblemDetails | null = null;
       const contentType = response.headers.get("content-type") || "";
@@ -542,6 +566,7 @@ async function request<T = unknown>(
  * Public API Client Singleton
  * ─────────────────────────────────────────────────────────────────────────────
  * The single, unified place fetch calls go through.
+ * Attaches the auth header via Better Auth, re-asks once on 401, and throws typed ApiError.
  */
 export const apiClient = {
   request,

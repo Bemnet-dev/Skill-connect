@@ -7,20 +7,30 @@ import {
   ApiError,
   isApiError,
   setAuthToken,
-  setRefreshToken,
   clearAuthTokens,
-  setCustomRefreshHandler,
+  setBetterAuthClient,
+  setBetterAuthTokenResolver,
 } from "@/lib/api-client";
 
-describe("apiClient (Centralized Fetch Pipeline)", () => {
+describe("apiClient (Better Auth Integrated Fetch Pipeline)", () => {
   const originalFetch = global.fetch;
   let mockFetch: jest.MockedFunction<typeof fetch>;
+  const mockToken = jest.fn<
+    (opts?: unknown) => Promise<{ data: { token: string } | null; error: unknown }>
+  >();
 
   beforeEach(() => {
     clearAuthTokens();
-    setCustomRefreshHandler(null);
+    setBetterAuthTokenResolver(null);
     mockFetch = jest.fn() as unknown as jest.MockedFunction<typeof fetch>;
     global.fetch = mockFetch;
+
+    // Attach mock Better Auth client
+    mockToken.mockReset();
+    mockToken.mockResolvedValue({ data: null, error: null });
+    setBetterAuthClient({
+      token: mockToken,
+    } as never);
   });
 
   afterEach(() => {
@@ -28,9 +38,13 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
     jest.clearAllMocks();
   });
 
-  describe("Authentication Header Attachment", () => {
-    it("attaches Authorization header when auth token exists", async () => {
-      setAuthToken("test-jwt-token");
+  describe("Authentication Header Attachment via Better Auth", () => {
+    it("asks Better Auth's client for current JWT before request and attaches Bearer header", async () => {
+      // Better Auth returns a valid current JWT
+      mockToken.mockResolvedValueOnce({
+        data: { token: "better-auth-jwt-123" },
+        error: null,
+      });
 
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ success: true }), {
@@ -42,15 +56,36 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
       const result = await apiClient.get<{ success: boolean }>("/test-endpoint");
 
       expect(result).toEqual({ success: true });
+      expect(mockToken).toHaveBeenCalledTimes(1);
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       const [calledUrl, calledInit] = mockFetch.mock.calls[0];
       expect(calledUrl).toContain("/test-endpoint");
       const headers = new Headers(calledInit?.headers);
-      expect(headers.get("Authorization")).toBe("Bearer test-jwt-token");
+      expect(headers.get("Authorization")).toBe("Bearer better-auth-jwt-123");
     });
 
-    it("does not attach Authorization header if no token exists", async () => {
+    it("falls back to stored access token if Better Auth client does not return a token", async () => {
+      setAuthToken("cached-stored-token");
+      mockToken.mockResolvedValueOnce({ data: null, error: null });
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      await apiClient.get("/test-endpoint");
+
+      const [, calledInit] = mockFetch.mock.calls[0];
+      const headers = new Headers(calledInit?.headers);
+      expect(headers.get("Authorization")).toBe("Bearer cached-stored-token");
+    });
+
+    it("does not attach Authorization header if no token exists from Better Auth or storage", async () => {
+      mockToken.mockResolvedValueOnce({ data: null, error: null });
+
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ data: "public" }), {
           status: 200,
@@ -65,8 +100,11 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
       expect(headers.has("Authorization")).toBe(false);
     });
 
-    it("skips Authorization header when skipAuth is true even if token exists", async () => {
-      setAuthToken("test-jwt-token");
+    it("skips asking Better Auth and skips Authorization header when skipAuth is true", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "should-be-skipped" },
+        error: null,
+      });
 
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ data: "skipped" }), {
@@ -77,18 +115,40 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
 
       await apiClient.get("/login", { skipAuth: true });
 
+      expect(mockToken).not.toHaveBeenCalled();
       const [, calledInit] = mockFetch.mock.calls[0];
       const headers = new Headers(calledInit?.headers);
       expect(headers.has("Authorization")).toBe(false);
     });
+
+    it("preserves explicitly passed custom Authorization header", async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: "custom" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      await apiClient.get("/endpoint", {
+        headers: { Authorization: "CustomToken manual-123" },
+      });
+
+      expect(mockToken).not.toHaveBeenCalled();
+      const [, calledInit] = mockFetch.mock.calls[0];
+      const headers = new Headers(calledInit?.headers);
+      expect(headers.get("Authorization")).toBe("CustomToken manual-123");
+    });
   });
 
-  describe("Silent Refresh & 401 Single Retry", () => {
-    it("retries once on 401 via silent refresh and succeeds", async () => {
-      setAuthToken("expired-access-token");
-      setRefreshToken("valid-refresh-token");
+  describe("401 from C# API — Re-ask Better Auth for fresh token once, then give up", () => {
+    it("on 401, re-asks Better Auth for fresh token, retries C# request once with new token, and succeeds", async () => {
+      // 1. Initial request gets current token from Better Auth
+      mockToken.mockResolvedValueOnce({
+        data: { token: "stale-jwt-token" },
+        error: null,
+      });
 
-      // 1st call: Original request returns 401 Unauthorized
+      // 2. C# API returns 401 Unauthorized
       mockFetch.mockResolvedValueOnce(
         new Response(
           JSON.stringify({ message: "Token expired", status: 401 }),
@@ -99,21 +159,13 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
         )
       );
 
-      // 2nd call: Silent refresh call to /api/v1/auth/refresh returns 200 with new token
-      mockFetch.mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            accessToken: "new-fresh-access-token",
-            refreshToken: "new-fresh-refresh-token",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }
-        )
-      );
+      // 3. On 401: re-asks Better Auth client for fresh token
+      mockToken.mockResolvedValueOnce({
+        data: { token: "fresh-better-auth-jwt" },
+        error: null,
+      });
 
-      // 3rd call: Retried original request returns 200 OK
+      // 4. Retried C# API request with fresh token returns 200 OK
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ profile: "worker-data" }), {
           status: 200,
@@ -124,27 +176,35 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
       const data = await apiClient.get<{ profile: string }>("/workers/me");
 
       expect(data).toEqual({ profile: "worker-data" });
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // C# API called exactly twice (initial + 1 retry)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // Better Auth queried twice (initial before request + re-ask on 401)
+      expect(mockToken).toHaveBeenCalledTimes(2);
 
-      // Check refresh call payload
-      const [refreshUrl, refreshInit] = mockFetch.mock.calls[1];
-      expect(refreshUrl).toContain("/api/v1/auth/refresh");
-      expect(refreshInit?.method).toBe("POST");
+      // Verify NO custom POST to /auth/refresh occurred
+      for (const [url, init] of mockFetch.mock.calls) {
+        expect(url).not.toContain("/auth/refresh");
+        if (init?.body) {
+          expect(String(init.body)).not.toContain("refreshToken");
+        }
+      }
 
-      // Check retried call had the new token
-      const [retriedUrl, retriedInit] = mockFetch.mock.calls[2];
+      // Check retried call had the refreshed Bearer token
+      const [retriedUrl, retriedInit] = mockFetch.mock.calls[1];
       expect(retriedUrl).toContain("/workers/me");
       const retriedHeaders = new Headers(retriedInit?.headers);
       expect(retriedHeaders.get("Authorization")).toBe(
-        "Bearer new-fresh-access-token"
+        "Bearer fresh-better-auth-jwt"
       );
     });
 
-    it("throws a typed ApiError on 401 if silent refresh fails", async () => {
-      setAuthToken("expired-access-token");
-      setRefreshToken("expired-refresh-token");
+    it("on 401, if Better Auth returns no fresh token, gives up immediately and throws typed ApiError", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "stale-jwt" },
+        error: null,
+      });
 
-      // 1st call: Original request fails with 401
+      // Initial call fails with 401
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ message: "Unauthorized" }), {
           status: 401,
@@ -152,13 +212,11 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
         })
       );
 
-      // 2nd call: Refresh call fails with 401
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "Refresh token revoked" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
+      // Re-asking Better Auth returns null (session expired or user logged out)
+      mockToken.mockResolvedValueOnce({
+        data: null,
+        error: { status: 401, message: "Session expired" },
+      });
 
       try {
         await apiClient.get("/account");
@@ -168,88 +226,78 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
         if (isApiError(err)) {
           expect(err.status).toBe(401);
           expect(err.name).toBe("ApiError");
+          expect(err.message).toContain("Session expired or unauthorized");
         }
       }
+
+      // Did not attempt a second C# fetch since Better Auth had no token
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it("does not retry 401 more than once (prevents infinite loop)", async () => {
-      setAuthToken("bad-token");
-      setRefreshToken("valid-refresh-token");
+    it("gives up if retried request STILL returns 401 (does not retry more than once)", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "initial-token" },
+        error: null,
+      });
 
-      // 1st call: 401
+      // 1st C# call: 401
       mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "Invalid token" }), {
+        new Response(JSON.stringify({ message: "Invalid signature" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         })
       );
 
-      // 2nd call: Refresh returns new token
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ accessToken: "still-bad-token" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      );
+      // Better Auth returns a new token
+      mockToken.mockResolvedValueOnce({
+        data: { token: "new-token-that-also-fails" },
+        error: null,
+      });
 
-      // 3rd call: Retried request STILL returns 401
+      // 2nd C# call (retry): STILL returns 401
       mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: "Still unauthorized" }), {
+        new Response(JSON.stringify({ message: "Forbidden or still invalid" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         })
       );
 
       await expect(apiClient.get("/secret")).rejects.toThrow(ApiError);
-      // Ensure exactly 3 fetch calls (1 original + 1 refresh + 1 retry, NOT 5 or infinite)
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      // Exactly 2 C# calls (1 original + 1 retry, NOT infinite loop)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockToken).toHaveBeenCalledTimes(2);
     });
 
-    it("deduplicates concurrent 401 requests to execute only one refresh call", async () => {
-      setAuthToken("expired-token");
-      setRefreshToken("shared-refresh-token");
+    it("deduplicates concurrent 401s so Better Auth is only re-asked once", async () => {
+      mockToken.mockResolvedValue({
+        data: { token: "stale-shared-token" },
+        error: null,
+      });
 
-      // Mock initial calls for 2 concurrent requests returning 401
-      mockFetch.mockImplementation(async (url) => {
-        const urlStr = String(url);
-        if (urlStr.includes("/api/v1/auth/refresh")) {
-          // Artificial delay for refresh call
-          await new Promise((r) => setTimeout(r, 20));
-          return new Response(
-            JSON.stringify({ accessToken: "new-shared-token" }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }
-          );
+      // Count re-asks via customTokenResolver
+      let reAskCount = 0;
+      setBetterAuthTokenResolver(async (opts) => {
+        if (opts?.forceRefresh) {
+          reAskCount++;
+          await new Promise((r) => setTimeout(r, 25));
+          return "refreshed-shared-jwt";
         }
-
-        // Check if retry has the new token
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return "stale-shared-token";
       });
 
-      // Override custom refresh handler to count invocations
-      let refreshCount = 0;
-      setCustomRefreshHandler(async () => {
-        refreshCount++;
-        await new Promise((r) => setTimeout(r, 20));
-        return "refreshed-shared-token";
-      });
-
-      // Force 401 on initial calls
-      let callCount = 0;
+      let csharpCallCount = 0;
       mockFetch.mockImplementation(async (url) => {
-        callCount++;
-        if (callCount <= 2) {
+        csharpCallCount++;
+        // First 2 calls return 401
+        if (csharpCallCount <= 2) {
           return new Response(JSON.stringify({ message: "Expired" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },
           });
         }
-        return new Response(JSON.stringify({ url: String(url) }), {
+        // Retried calls succeed
+        return new Response(JSON.stringify({ url: String(url), ok: true }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
@@ -262,8 +310,30 @@ describe("apiClient (Centralized Fetch Pipeline)", () => {
 
       expect(res1).toBeDefined();
       expect(res2).toBeDefined();
-      // Crucial: Only 1 refresh was performed despite 2 concurrent 401s
-      expect(refreshCount).toBe(1);
+      // Crucial: Only 1 re-ask was performed despite 2 concurrent 401s
+      expect(reAskCount).toBe(1);
+    });
+
+    it("skips 401 re-ask when skipAuthRefresh option is enabled", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "token-1" },
+        error: null,
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      await expect(
+        apiClient.get("/strict-endpoint", { skipAuthRefresh: true })
+      ).rejects.toThrow(ApiError);
+
+      // Better Auth was only asked once before request; not re-asked on 401
+      expect(mockToken).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
