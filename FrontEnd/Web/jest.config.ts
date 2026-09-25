@@ -17,7 +17,7 @@ const jestConfig = async () => {
     "^@/(.*)$": "<rootDir>/src/$1",
   };
   config.transformIgnorePatterns = [
-    "[\\\\/]node_modules[\\\\/](?!(@better-auth|better-auth|nanostores|better-call|better-fetch)[\\\\/])",
+    "[\\\\/]node_modules[\\\\/](?!(@better-auth|better-auth|nanostores|better-call|better-fetch|@noble|jose|rou3|kysely)[\\\\/])",
   ];
   return config;
 };
