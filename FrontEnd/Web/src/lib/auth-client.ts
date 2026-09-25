@@ -1,15 +1,19 @@
 import { createAuthClient } from "better-auth/react";
-import { jwtClient } from "better-auth/client/plugins";
+import { jwtClient, phoneNumberClient } from "better-auth/client/plugins";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * Better Auth Client Singleton
  * ─────────────────────────────────────────────────────────────────────────────
- * Configured with the JWT client plugin so client calls can retrieve
- * current JWTs to authenticate against the C# backend API.
+ * Client instance created via createAuthClient from better-auth/react, configured
+ * with the phoneNumber and jwt client plugins.
  *
- * Better Auth handles session refresh, cookie caching, and rotation internally.
- * In React components, useSession() provides reactive session state.
+ * - jwtClient(): Mints and retrieves short-lived JWTs to authenticate against
+ *   the C# backend API.
+ * - phoneNumberClient(): Enables phone number + OTP sign-in and verification.
+ * - better-auth/react: Provides reactive useSession() hook and session management.
+ *
+ * This centralized instance is imported by features, hooks, and context providers.
  */
 export const authClient = createAuthClient({
   baseURL:
@@ -17,7 +21,7 @@ export const authClient = createAuthClient({
     (typeof window !== "undefined"
       ? window.location.origin
       : "http://localhost:3000"),
-  plugins: [jwtClient()],
+  plugins: [jwtClient(), phoneNumberClient()],
   fetchOptions: {
     customFetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
   },
