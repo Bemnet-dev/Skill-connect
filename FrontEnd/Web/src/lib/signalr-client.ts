@@ -7,6 +7,7 @@ import {
   type IHttpConnectionOptions,
 } from "@microsoft/signalr";
 import { SIGNALR } from "@/lib/constants";
+import { authClient } from "@/lib/auth-client";
 import { getAuthToken } from "@/lib/api-client";
 
 /**
@@ -28,7 +29,7 @@ export interface BuildSignalRConnectionOptions {
 
   /**
    * Custom access token factory override.
-   * Defaults to reading the current JWT via getAuthToken() from @/lib/api-client.
+   * Defaults to reading the current JWT from Better Auth's client.
    */
   accessTokenFactory?: () => string | Promise<string>;
 
@@ -71,8 +72,16 @@ export function buildSignalRConnection(
 ): HubConnection {
   const hubUrl = getSignalRHubUrl(options.hubUrl);
 
-  // Default token factory attaches the current JWT token from the centralized api-client/localStorage
+  // Default token factory attaches the current JWT from Better Auth's client
   const defaultAccessTokenFactory = async (): Promise<string> => {
+    try {
+      const { data, error } = await authClient.token();
+      if (!error && data?.token) {
+        return data.token;
+      }
+    } catch {
+      // Silently fall back to cached token if Better Auth is unreachable
+    }
     const token = getAuthToken();
     return token ?? "";
   };
