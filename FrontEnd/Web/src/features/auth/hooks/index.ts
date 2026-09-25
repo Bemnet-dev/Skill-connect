@@ -1,18 +1,13 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * Auth Feature Type Definitions
+ * Auth Hooks Barrel Export
  * ─────────────────────────────────────────────────────────────────────────────
- * Re-exports inferred schema types and defines auth domain models.
  */
 
-export type {
-  LoginInput,
-  VerifyOtpInput,
-  AuthUser,
-  SessionInfo,
-  SessionResponse,
-  UserRole,
-} from "./schema";
-
-export type { RequestOtpResponse } from "./api";
-export type { UseAuthReturn } from "./hooks/useAuth";
+export { useLogin, type UseLoginOptions, type LoginVariables } from "./useLogin";
+export {
+  useVerifyOtp,
+  type UseVerifyOtpOptions,
+  type VerifyOtpVariables,
+} from "./useVerifyOtp";
+export { useAuth, type UseAuthReturn } from "./useAuth";

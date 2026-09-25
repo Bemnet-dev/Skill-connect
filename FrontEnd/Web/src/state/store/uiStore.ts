@@ -29,16 +29,19 @@ export interface Toast {
   createdAt: number;
 }
 
-export type ToastInput = (
-  | { message: string; title?: string }
-  | string
-) & {
+export interface ToastOptions {
   type?: ToastType;
+  title?: string;
   duration?: number;
   dismissible?: boolean;
   action?: ToastAction;
   id?: string;
-};
+}
+
+export type ToastInput = (
+  | { message: string; title?: string }
+  | string
+) & ToastOptions;
 
 export interface ActiveBanner {
   id: string;
@@ -71,10 +74,10 @@ export interface UiActions {
   clearToasts: () => void;
 
   /** Convenience helpers for standard toast types */
-  success: (message: string, options?: Omit<ToastInput, "type" | "message">) => string;
-  error: (message: string, options?: Omit<ToastInput, "type" | "message">) => string;
-  warning: (message: string, options?: Omit<ToastInput, "type" | "message">) => string;
-  info: (message: string, options?: Omit<ToastInput, "type" | "message">) => string;
+  success: (message: string, options?: Omit<ToastOptions, "type">) => string;
+  error: (message: string, options?: Omit<ToastOptions, "type">) => string;
+  warning: (message: string, options?: Omit<ToastOptions, "type">) => string;
+  info: (message: string, options?: Omit<ToastOptions, "type">) => string;
 
   /** Modal management */
   openModal: (modalId: string, data?: unknown) => void;
@@ -288,13 +291,13 @@ export const useUiStore = create<UiStore>((set) => ({
  */
 export const toast = {
   add: (input: ToastInput | string): string => useUiStore.getState().addToast(input),
-  success: (message: string, options?: Omit<ToastInput, "type" | "message">): string =>
+  success: (message: string, options?: Omit<ToastOptions, "type">): string =>
     useUiStore.getState().success(message, options),
-  error: (message: string, options?: Omit<ToastInput, "type" | "message">): string =>
+  error: (message: string, options?: Omit<ToastOptions, "type">): string =>
     useUiStore.getState().error(message, options),
-  warning: (message: string, options?: Omit<ToastInput, "type" | "message">): string =>
+  warning: (message: string, options?: Omit<ToastOptions, "type">): string =>
     useUiStore.getState().warning(message, options),
-  info: (message: string, options?: Omit<ToastInput, "type" | "message">): string =>
+  info: (message: string, options?: Omit<ToastOptions, "type">): string =>
     useUiStore.getState().info(message, options),
   dismiss: (id: string): void => useUiStore.getState().removeToast(id),
   clear: (): void => useUiStore.getState().clearToasts(),

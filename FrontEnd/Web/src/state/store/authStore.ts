@@ -63,11 +63,12 @@ export function getPermissionsForRole(
 export interface User {
   id: string;
   phone?: string;
+  phoneNumber?: string;
   role: UserRole;
-  fullName?: string;
-  name?: string;
-  email?: string;
-  avatarUrl?: string;
+  fullName?: string | null;
+  name?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
   image?: string | null;
   isVerified?: boolean;
   onboardingCompleted?: boolean;
@@ -77,7 +78,9 @@ export interface User {
 
 export interface BetterAuthSessionData {
   user?: Partial<User> & { id?: string; role?: string };
-  session?: { id?: string; userId?: string; expiresAt?: string | Date };
+  session?: { id?: string; userId?: string; expiresAt?: string | Date; token?: string; [key: string]: unknown };
+  token?: string;
+  refreshToken?: string;
   [key: string]: unknown;
 }
 
@@ -121,7 +124,8 @@ export function deriveAuthState(
   const user: User = {
     id: rawUser.id,
     role,
-    phone: rawUser.phone || "",
+    phone: rawUser.phone || (rawUser as Record<string, unknown>).phoneNumber as string || "",
+    phoneNumber: (rawUser as Record<string, unknown>).phoneNumber as string || rawUser.phone || "",
     fullName: rawUser.fullName || rawUser.name || "",
     name: rawUser.name || rawUser.fullName || "",
     email: rawUser.email,
@@ -156,6 +160,11 @@ export interface AuthState extends DerivedAuthState {
    * Synchronizes derived state from Better Auth session data
    */
   syncFromSession: (sessionData?: BetterAuthSessionData | null) => void;
+
+  /**
+   * Sets the active authenticated session and persists any returned tokens
+   */
+  setSession: (sessionData?: BetterAuthSessionData | null) => void;
 
   /**
    * Asynchronously fetches current session from Better Auth client and updates derived read
@@ -196,6 +205,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   syncFromSession: (sessionData?: BetterAuthSessionData | null) => {
     const derived = deriveAuthState(sessionData, false);
     set(derived);
+  },
+
+  setSession: (sessionData?: BetterAuthSessionData | null) => {
+    if (sessionData && typeof sessionData === "object") {
+      const candidateToken =
+        ("token" in sessionData && typeof sessionData.token === "string"
+          ? sessionData.token
+          : null) ||
+        ("session" in sessionData &&
+        sessionData.session &&
+        typeof sessionData.session === "object" &&
+        "token" in sessionData.session &&
+        typeof (sessionData.session as { token?: unknown }).token === "string"
+          ? (sessionData.session as { token: string }).token
+          : null);
+
+      if (candidateToken) {
+        setAuthToken(candidateToken);
+      }
+    }
+
+    const derived = deriveAuthState(sessionData, false);
+    set({
+      ...derived,
+      token: getAuthToken() || derived.token,
+    });
   },
 
   refreshFromBetterAuth: async () => {
@@ -372,5 +407,21 @@ export const getPermissions = (): Permission[] =>
  */
 export const hasPermission = (permission: Permission): boolean =>
   useAuthStore.getState().hasPermission(permission);
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Standalone authStore Dispatcher (Imperative API)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Provides imperative setters for mutation callbacks (e.g. useVerifyOtp)
+ * without requiring React hooks.
+ */
+export const authStore = {
+  setSession: (sessionData?: BetterAuthSessionData | null): void => {
+    useAuthStore.getState().setSession(sessionData);
+  },
+  getState: (): AuthState => useAuthStore.getState(),
+  logout: (): void => useAuthStore.getState().logout(),
+  reset: (): void => useAuthStore.getState().reset(),
+};
 
 export default useAuthStore;

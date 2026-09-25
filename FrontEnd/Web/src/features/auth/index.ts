@@ -10,5 +10,5 @@ export * from './schema';
 // Re-export API functions
 export * from './api';
 
-// Re-export hooks (when available)
-// export * from './hooks';
+// Re-export hooks
+export * from './hooks';
