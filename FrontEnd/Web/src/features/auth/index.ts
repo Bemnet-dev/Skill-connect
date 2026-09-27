@@ -76,7 +76,12 @@ export type {
   UseAuthReturn,
 } from "./hooks";
 
+export {
+  ROLE_PERMISSIONS,
+  getPermissionsForRole,
+} from "./permissions";
+
 export type {
   User,
   Permission,
-} from "@/state/store/authStore";
+} from "./types";

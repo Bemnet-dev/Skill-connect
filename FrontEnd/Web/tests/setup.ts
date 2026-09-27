@@ -1,8 +1,18 @@
 import '@testing-library/jest-dom';
 import '@testing-library/react';
+import { TextEncoder, TextDecoder } from 'util';
 
 // Polyfill Web API globals in JSDOM environment
 /* eslint-disable @typescript-eslint/no-explicit-any */
+if (typeof (global as any).TextEncoder === 'undefined') {
+  (global as any).TextEncoder = TextEncoder;
+  (global as any).TextDecoder = TextDecoder;
+}
+if (typeof window !== 'undefined' && typeof (window as any).TextEncoder === 'undefined') {
+  (window as any).TextEncoder = TextEncoder;
+  (window as any).TextDecoder = TextDecoder;
+}
+
 const rootGlobal = Function('return this')();
 
 if (typeof (global as any).Request === 'undefined') {

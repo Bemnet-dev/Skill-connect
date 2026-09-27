@@ -1,26 +1,29 @@
-"use client";
-
 import * as React from "react";
-import { X, Loader2 } from "lucide-react";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { RoleSidebar } from "./RoleSidebar";
-import { ToastContainer } from "@/components/feedback/Toast";
-import { useUiStore } from "@/state/store/uiStore";
-import { UserRole } from "@/state/store/authStore";
+import { SidebarToggle } from "./SidebarToggle";
+import { AppShellFeedback } from "./AppShellFeedback";
+import { UserRole } from "@/features/auth";
 import { cn } from "@/lib/utils";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * AppShell Component
+ * AppShell Component (Server Component)
  * ─────────────────────────────────────────────────────────────────────────────
- * Primary application layout container wrapping Header, optional RoleSidebar,
- * main page content, Footer, and the global reactive Toast notifications overlay.
+ * Primary application layout container implemented as a Server Component (SC-FE-003 §7.2).
+ *
+ * Directly renders Server Components (<Header />, <Footer />) and page children,
+ * delegating client interactions to focused Client islands:
+ * - <SidebarToggle />: Mobile sidebar toggle button and slide-out drawer (§7.2)
+ * - <AppShellFeedback />: Reactive banner, global loading overlay, and toasts
  */
 
 export interface AppShellProps {
   /** Page content */
   children: React.ReactNode;
+  /** Optional custom header slot (defaults to Server Component <Header />) */
+  header?: React.ReactNode;
   /** Whether to render the primary Header navigation */
   showHeader?: boolean;
   /** Whether to render the Footer */
@@ -37,6 +40,7 @@ export interface AppShellProps {
 
 export function AppShell({
   children,
+  header,
   showHeader = true,
   showFooter = true,
   showSidebar = false,
@@ -44,49 +48,27 @@ export function AppShell({
   className,
   contentClassName,
 }: AppShellProps) {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
-
-  const isGlobalLoading = useUiStore((state) => state.isGlobalLoading);
-  const activeBanner = useUiStore((state) => state.activeBanner);
-  const clearBanner = useUiStore((state) => state.clearBanner);
-
   return (
     <div className={cn("min-h-screen flex flex-col bg-white text-gray-900", className)}>
-      {/* ── Top Announcement Banner (if active) ── */}
-      {activeBanner && (
-        <div
-          className={cn(
-            "relative flex items-center justify-between px-4 py-2.5 text-xs font-medium z-50 text-white shadow-sm",
-            activeBanner.type === "warning" && "bg-warning",
-            activeBanner.type === "info" && "bg-primary",
-            activeBanner.type === "announcement" && "bg-brand-navy"
-          )}
-        >
-          <div className="flex-1 text-center truncate">{activeBanner.message}</div>
-          {activeBanner.dismissible !== false && (
-            <button
-              type="button"
-              onClick={clearBanner}
-              className="p-1 rounded hover:bg-black/10 focus:outline-none"
-              aria-label="Dismiss banner"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      )}
+      {/* ── Client Feedback Island (Banner, Loading Overlay, Toasts) ── */}
+      <AppShellFeedback />
 
-      {/* ── Sticky Top Header ── */}
-      {showHeader && <Header />}
+      {/* ── Sticky Top Header (Direct Server Component) ── */}
+      {showHeader && (header ?? <Header />)}
 
       {/* ── Main Layout Body with Optional Sidebar ── */}
       <div className="flex-1 flex w-full">
         {showSidebar && (
-          <RoleSidebar
-            role={sidebarRole}
-            collapsed={isSidebarCollapsed}
-            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-          />
+          <>
+            {/* Desktop Role Sidebar */}
+            <RoleSidebar
+              role={sidebarRole}
+              className="hidden md:flex"
+            />
+
+            {/* Mobile Sidebar-Toggle Client Island (§7.2) */}
+            <SidebarToggle role={sidebarRole} />
+          </>
         )}
 
         <main className={cn("flex-1 min-w-0 flex flex-col", contentClassName)}>
@@ -96,21 +78,6 @@ export function AppShell({
 
       {/* ── Footer ── */}
       {showFooter && <Footer />}
-
-      {/* ── Fullscreen Loading Overlay ── */}
-      {isGlobalLoading && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/70 backdrop-blur-xs animate-fadeIn"
-          aria-live="assertive"
-          aria-busy="true"
-        >
-          <Loader2 className="h-10 w-10 text-primary animate-spin" />
-          <p className="mt-3 text-sm font-semibold text-gray-700">Loading...</p>
-        </div>
-      )}
-
-      {/* ── Global Interactive Toast Notifications Container ── */}
-      <ToastContainer />
     </div>
   );
 }

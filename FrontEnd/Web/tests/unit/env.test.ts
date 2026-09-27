@@ -40,6 +40,12 @@ describe("Environment Variable Validation (src/env.ts & src/lib/env.ts)", () => 
       expect(rootEnv.AUTH_JWT_EXPIRY).toBeDefined();
       expect(typeof rootEnv.AUTH_JWT_EXPIRY).toBe("string");
     });
+
+    it("provides INTERNAL_REVALIDATE_SECRET for on-demand ISR cache invalidation", () => {
+      expect(rootEnv.INTERNAL_REVALIDATE_SECRET).toBeDefined();
+      expect(typeof rootEnv.INTERNAL_REVALIDATE_SECRET).toBe("string");
+      expect(rootEnv.INTERNAL_REVALIDATE_SECRET.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe("Client Public Environment Variables", () => {

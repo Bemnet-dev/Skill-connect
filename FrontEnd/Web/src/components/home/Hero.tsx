@@ -94,6 +94,8 @@ export function Hero() {
             width={520}
             height={400}
             className="w-full h-auto object-contain"
+            sizes="(max-width: 1024px) 100vw, 520px"
+            style={{ width: "100%", height: "auto" }}
             priority
           />
         </div>

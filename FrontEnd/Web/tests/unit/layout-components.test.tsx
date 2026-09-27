@@ -4,12 +4,10 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 
 // ─── Module Mocks ─────────────────────────────────────────────────────────────
 // Use global `jest.mock` (not from @jest/globals import) so SWC hoists properly.
-// The `jest` object from @jest/globals is NOT recognized by the SWC hoisting
-// transform, causing mock factories to never execute.
-
 const mockPush = jest.fn();
+const mockRefresh = jest.fn();
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), refresh: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), refresh: mockRefresh }),
   usePathname: () => "/bookings",
 }));
 
@@ -37,10 +35,36 @@ jest.mock("@/lib/auth-client", () => {
   };
 });
 
+const mockGetSession = jest.fn();
+jest.mock("@/lib/auth-server", () => ({
+  __esModule: true,
+  auth: {
+    api: {
+      getSession: (...args: unknown[]) => mockGetSession(...args),
+    },
+  },
+}));
+
+jest.mock("next/headers", () => ({
+  headers: jest.fn().mockResolvedValue(new Headers()),
+}));
+
 // ─── Imports (resolved AFTER jest.mock hoisting) ──────────────────────────────
 import { authClient } from "@/lib/auth-client";
-import { Header, Footer, RoleSidebar, AppShell } from "@/components/layout";
+import {
+  Header,
+  AccountMenu,
+  MobileNav,
+  SidebarToggle,
+  AppShellFeedback,
+  Footer,
+  RoleSidebar,
+  AppShell,
+  getUserInitials,
+  getDashboardLink,
+} from "@/components/layout";
 import { useUiStore, toast } from "@/state/store/uiStore";
+import { ROUTES } from "@/lib/constants";
 
 // Retrieve typed mock references from the mocked module
 const mockUseSession = authClient.useSession as jest.Mock;
@@ -57,77 +81,141 @@ describe("Layout Chrome Components (src/components/layout/*)", () => {
       isPending: false,
     });
     mockSignOut.mockResolvedValue(undefined);
+    mockGetSession.mockResolvedValue(null);
   });
 
-  describe("Header Component", () => {
-    it("renders unauthenticated state with 'Log In' button when session is null", () => {
-      mockUseSession.mockReturnValue({
-        data: null,
-        isPending: false,
+  describe("Helper Functions", () => {
+    it("generates initials correctly from single, multi-word names, and email fallback", () => {
+      expect(getUserInitials("Abebe Kebede")).toBe("AK");
+      expect(getUserInitials("Dawit")).toBe("DA");
+      expect(getUserInitials(undefined, "solomon@example.com")).toBe("SO");
+      expect(getUserInitials()).toBe("U");
+    });
+
+    it("resolves dashboard links according to role", () => {
+      expect(getDashboardLink("worker")).toBe(ROUTES.WORKER.DASHBOARD);
+      expect(getDashboardLink("admin")).toBe(ROUTES.ADMIN.VERIFICATION_QUEUE);
+      expect(getDashboardLink("customer")).toBe(ROUTES.CUSTOMER.BOOKINGS);
+      expect(getDashboardLink(undefined)).toBe(ROUTES.CUSTOMER.BOOKINGS);
+    });
+  });
+
+  describe("Header Component (Server Component SC-FE-003 §8.1)", () => {
+    it("fetches session on server and renders AccountMenu client island when authenticated", async () => {
+      mockGetSession.mockResolvedValueOnce({
+        user: {
+          id: "u-server-123",
+          name: "Dawit Server",
+          email: "dawit@example.com",
+          role: "worker",
+        },
+        session: { id: "sess-abc" },
       });
 
-      render(<Header />);
+      const headerJsx = await Header({ showSearch: true });
+      render(headerJsx);
+
+      expect(mockGetSession).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Dawit Server")).toBeInTheDocument();
+      expect(screen.getByText("DS")).toBeInTheDocument();
+      expect(screen.getByText("worker")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /^log in$/i })).not.toBeInTheDocument();
+    });
+
+    it("renders unauthenticated CTAs when server session is null", async () => {
+      mockGetSession.mockResolvedValueOnce(null);
+
+      const headerJsx = await Header({});
+      render(headerJsx);
 
       expect(screen.getByRole("link", { name: /log in/i })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: /post a job/i })).toBeInTheDocument();
       expect(screen.queryByLabelText(/user profile menu/i)).not.toBeInTheDocument();
     });
 
-    it("renders loading skeletons when session is pending", () => {
+    it("catches getSession server errors gracefully and renders unauthenticated fallback", async () => {
+      mockGetSession.mockRejectedValueOnce(new Error("Connection reset"));
+
+      const headerJsx = await Header({});
+      render(headerJsx);
+
+      expect(screen.getByRole("link", { name: /log in/i })).toBeInTheDocument();
+    });
+  });
+
+  describe("AccountMenu Component (Client Island)", () => {
+    it("renders authenticated user name, initials, and role badge when user prop is passed", () => {
+      render(
+        <AccountMenu
+          user={{
+            id: "u-123",
+            name: "Dawit Worku",
+            email: "dawit@example.com",
+            role: "worker",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            emailVerified: true,
+          }}
+        />
+      );
+
+      expect(screen.getByText("Dawit Worku")).toBeInTheDocument();
+      expect(screen.getByText("DW")).toBeInTheDocument(); // Initials
+      expect(screen.getByText("worker")).toBeInTheDocument(); // Role badge
+    });
+
+    it("renders loading skeletons when client session is pending without server user prop", () => {
       mockUseSession.mockReturnValue({
         data: null,
         isPending: true,
       });
 
-      const { container } = render(<Header />);
+      const { container } = render(<AccountMenu />);
       expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
     });
 
-    it("renders authenticated user name, initials, and role badge", () => {
+    it("returns null when unauthenticated in client fallback mode", () => {
       mockUseSession.mockReturnValue({
-        data: {
-          user: {
-            id: "u-123",
-            name: "Dawit Worku",
-            email: "dawit@example.com",
-            role: "worker",
-          },
-        },
+        data: null,
         isPending: false,
       });
 
-      render(<Header />);
-
-      expect(screen.getByText("Dawit Worku")).toBeInTheDocument();
-      expect(screen.getByText("DW")).toBeInTheDocument(); // Initials
-      expect(screen.getByText("worker")).toBeInTheDocument(); // Role badge
-      expect(screen.queryByRole("link", { name: /^log in$/i })).not.toBeInTheDocument();
+      const { container } = render(<AccountMenu />);
+      expect(container.firstChild).toBeNull();
     });
 
-    it("opens profile dropdown menu on click and handles logout", async () => {
+    it("opens profile dropdown menu on click, handles Escape key, and handles logout", async () => {
       mockSignOut.mockResolvedValue(undefined);
-      mockUseSession.mockReturnValue({
-        data: {
-          user: {
+
+      render(
+        <AccountMenu
+          user={{
             id: "cust-1",
             name: "Sara Customer",
             email: "sara@example.com",
             role: "customer",
-          },
-        },
-        isPending: false,
-      });
-
-      render(<Header />);
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            emailVerified: true,
+          }}
+        />
+      );
 
       const userMenuTrigger = screen.getByLabelText(/user profile menu/i);
       fireEvent.click(userMenuTrigger);
 
-      // Name appears in both the trigger and the dropdown summary
+      // Name appears in both trigger and dropdown summary
       expect(screen.getAllByText("Sara Customer").length).toBeGreaterThanOrEqual(2);
-      // Email only appears in the dropdown
       expect(screen.getByText("sara@example.com")).toBeInTheDocument();
       expect(screen.getByText("Dashboard")).toBeInTheDocument();
+
+      // Test Escape key closes dropdown
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByText("Profile & Settings")).not.toBeInTheDocument();
+
+      // Re-open menu to test logout
+      fireEvent.click(userMenuTrigger);
+      expect(screen.getByText("Profile & Settings")).toBeInTheDocument();
 
       const logoutBtn = screen.getByRole("menuitem", { name: /log out/i });
       await act(async () => {
@@ -136,6 +224,56 @@ describe("Layout Chrome Components (src/components/layout/*)", () => {
 
       expect(mockSignOut).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith("/");
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("MobileNav Component (Client Island)", () => {
+    it("toggles mobile menu on mobile button click and closes on Escape", () => {
+      render(<MobileNav />);
+
+      const mobileToggle = screen.getByLabelText(/toggle navigation menu/i);
+      expect(mobileToggle).toBeInTheDocument();
+
+      // Open mobile menu
+      fireEvent.click(mobileToggle);
+      expect(screen.getByText("Find Workers")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /log in/i })).toBeInTheDocument();
+
+      // Close via Escape key
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByText("Find Workers")).not.toBeInTheDocument();
+    });
+
+    it("renders authenticated links and handles logout in mobile menu", async () => {
+      render(
+        <MobileNav
+          user={{
+            id: "u-m-1",
+            name: "Mobile Worker",
+            email: "mw@example.com",
+            role: "worker",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            emailVerified: true,
+          }}
+        />
+      );
+
+      const mobileToggle = screen.getByLabelText(/toggle navigation menu/i);
+      fireEvent.click(mobileToggle);
+
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+      expect(screen.getByText("My Bookings")).toBeInTheDocument();
+
+      const logoutBtn = screen.getByRole("button", { name: /log out/i });
+      await act(async () => {
+        fireEvent.click(logoutBtn);
+      });
+
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -189,32 +327,91 @@ describe("Layout Chrome Components (src/components/layout/*)", () => {
     });
   });
 
-  describe("AppShell Component", () => {
-    it("renders main content, Header, and Footer", () => {
+  describe("SidebarToggle Component (Client Island SC-FE-003 §7.2)", () => {
+    it("renders mobile toggle button and opens slide-out drawer on click", () => {
+      render(<SidebarToggle role="worker" />);
+
+      const toggleBtn = screen.getByLabelText(/open sidebar navigation/i);
+      expect(toggleBtn).toBeInTheDocument();
+
+      // Open drawer
+      fireEvent.click(toggleBtn);
+      expect(screen.getByText("Portal Menu")).toBeInTheDocument();
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+
+      // Close drawer on Escape
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByText("Portal Menu")).not.toBeInTheDocument();
+    });
+
+    it("closes drawer when close button is clicked", () => {
+      render(<SidebarToggle role="customer" />);
+
+      const toggleBtn = screen.getByLabelText(/open sidebar navigation/i);
+      fireEvent.click(toggleBtn);
+      expect(screen.getByText("Portal Menu")).toBeInTheDocument();
+
+      const closeBtn = screen.getByLabelText(/close sidebar drawer/i);
+      fireEvent.click(closeBtn);
+      expect(screen.queryByText("Portal Menu")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("AppShellFeedback Component (Client Island)", () => {
+    it("renders active announcement banner and clears it on dismiss", () => {
+      useUiStore.setState({
+        activeBanner: {
+          id: "banner-1",
+          type: "warning",
+          message: "System scheduled maintenance tonight",
+          dismissible: true,
+        },
+      });
+
+      render(<AppShellFeedback />);
+      expect(screen.getByText("System scheduled maintenance tonight")).toBeInTheDocument();
+
+      const dismissBtn = screen.getByLabelText(/dismiss banner/i);
+      fireEvent.click(dismissBtn);
+
+      expect(useUiStore.getState().activeBanner).toBeNull();
+    });
+
+    it("renders fullscreen loading overlay when isGlobalLoading is true", () => {
+      useUiStore.setState({ isGlobalLoading: true });
+
+      render(<AppShellFeedback />);
+      expect(screen.getByText("Loading...")).toBeInTheDocument();
+    });
+  });
+
+  describe("AppShell Component (Server Component SC-FE-003 §7.2)", () => {
+    it("renders main content, custom header slot, and Footer", () => {
       render(
-        <AppShell>
+        <AppShell header={<header role="banner">App Header Slot</header>}>
           <div data-testid="page-content">Page Body Content</div>
         </AppShell>
       );
 
       expect(screen.getByTestId("page-content")).toBeInTheDocument();
-      expect(screen.getByRole("banner")).toBeInTheDocument(); // Header
-      expect(screen.getByRole("contentinfo")).toBeInTheDocument(); // Footer
+      expect(screen.getByRole("banner")).toBeInTheDocument();
+      expect(screen.getByRole("contentinfo")).toBeInTheDocument();
     });
 
-    it("renders RoleSidebar when showSidebar is true", () => {
+    it("renders desktop RoleSidebar and mobile SidebarToggle when showSidebar is true", () => {
       render(
-        <AppShell showSidebar sidebarRole="worker">
+        <AppShell showSidebar sidebarRole="worker" header={<header role="banner">Header</header>}>
           <div>Worker Page</div>
         </AppShell>
       );
 
       expect(screen.getByText("Job Requests")).toBeInTheDocument();
+      expect(screen.getByLabelText(/open sidebar navigation/i)).toBeInTheDocument();
     });
 
-    it("renders interactive toast notifications from uiStore", () => {
+    it("renders interactive toast notifications via AppShellFeedback", () => {
       render(
-        <AppShell>
+        <AppShell header={<header role="banner">Header</header>}>
           <div>Main View</div>
         </AppShell>
       );

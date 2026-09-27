@@ -21,7 +21,7 @@ import {
   Sliders,
 } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
-import { UserRole } from "@/state/store/authStore";
+import { UserRole } from "@/features/auth";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -88,10 +88,14 @@ const adminNavItems: NavItem[] = [
 
 export function RoleSidebar({
   role,
-  collapsed = false,
+  collapsed: controlledCollapsed,
   onToggleCollapse,
   className,
 }: RoleSidebarProps) {
+  const [internalCollapsed, setInternalCollapsed] = React.useState(false);
+  const collapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+  const handleToggle = onToggleCollapse ?? (() => setInternalCollapsed((prev) => !prev));
+
   const pathname = usePathname() || "/";
 
   const { data: session } = useSession();
@@ -144,20 +148,18 @@ export function RoleSidebar({
         )}
 
         {/* Collapse / Expand Toggle */}
-        {onToggleCollapse && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleToggle}
+          className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </button>
       </div>
 
       {/* ── Navigation Links List ── */}

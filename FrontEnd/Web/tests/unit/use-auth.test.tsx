@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "@jest/globals";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 
 // ─── Module Mocks ─────────────────────────────────────────────────────────────
 // Use global `jest.mock` (not from @jest/globals import) so SWC hoists properly.
@@ -28,7 +28,6 @@ jest.mock("@/lib/auth-client", () => {
 // ─── Imports (resolved AFTER jest.mock hoisting) ──────────────────────────────
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { useAuthStore, authStore } from "@/state/store/authStore";
 import { apiClient, clearAuthTokens, getAuthToken, setAuthToken } from "@/lib/api-client";
 
 // Retrieve typed mock references from the mocked module
@@ -38,7 +37,6 @@ const mockSignOut = authClient.signOut as jest.Mock;
 describe("useAuth Hook (src/features/auth/hooks/useAuth.ts)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    authStore.reset();
     clearAuthTokens();
     mockUseSession.mockReturnValue({ data: null, isPending: false, error: null });
     mockSignOut.mockResolvedValue(undefined);
@@ -59,39 +57,43 @@ describe("useAuth Hook (src/features/auth/hooks/useAuth.ts)", () => {
     expect(result.current.token).toBeNull();
   });
 
-  it("returns active session when authenticated via Zustand authStore", () => {
-    authStore.setSession({
-      user: {
-        id: "usr_store_123",
-        phone: "+251911223344",
-        role: "customer",
-        name: "Bethlehem Customer",
-        isVerified: true,
+  it("returns active session and permissions when customer is authenticated via Better Auth useSession", () => {
+    mockUseSession.mockReturnValue({
+      data: {
+        user: {
+          id: "usr_cust_123",
+          phone: "+251911223344",
+          role: "customer",
+          name: "Bethlehem Customer",
+          isVerified: true,
+        },
+        session: {
+          id: "sess_123",
+          userId: "usr_cust_123",
+          expiresAt: "2026-12-31T00:00:00.000Z",
+        },
       },
-      session: {
-        id: "sess_123",
-        userId: "usr_store_123",
-        expiresAt: "2026-12-31T00:00:00.000Z",
-      },
-      token: "jwt_token_customer_store",
+      isPending: false,
+      error: null,
     });
+    setAuthToken("jwt_token_customer");
 
     const { result } = renderHook(() => useAuth());
 
     expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.user).toBeDefined();
-    expect(result.current.user?.id).toBe("usr_store_123");
+    expect(result.current.user?.id).toBe("usr_cust_123");
     expect(result.current.user?.name).toBe("Bethlehem Customer");
-    expect(result.current.userId).toBe("usr_store_123");
+    expect(result.current.userId).toBe("usr_cust_123");
     expect(result.current.role).toBe("customer");
     expect(result.current.permissions).toContain("booking:create");
     expect(result.current.hasPermission("booking:create")).toBe(true);
     expect(result.current.hasPermission("worker:accept_job")).toBe(false);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.token).toBe("jwt_token_customer_store");
+    expect(result.current.token).toBe("jwt_token_customer");
   });
 
-  it("returns active session and permissions when authenticated via Better Auth useSession", async () => {
+  it("returns active session and permissions when worker is authenticated via Better Auth useSession", () => {
     mockUseSession.mockReturnValue({
       data: {
         user: {
@@ -120,12 +122,6 @@ describe("useAuth Hook (src/features/auth/hooks/useAuth.ts)", () => {
     expect(result.current.role).toBe("worker");
     expect(result.current.hasPermission("worker:accept_job")).toBe(true);
     expect(result.current.hasPermission("admin:access")).toBe(false);
-
-    // Verify Zustand store was synchronized via useEffect
-    await waitFor(() => {
-      expect(useAuthStore.getState().userId).toBe("worker_ba_888");
-      expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    });
   });
 
   it("reflects admin role permissions correctly", () => {
@@ -165,33 +161,16 @@ describe("useAuth Hook (src/features/auth/hooks/useAuth.ts)", () => {
     expect(result.current.isAuthenticated).toBe(false);
   });
 
-  it("does not indicate loading if user is already authenticated in store", () => {
-    authStore.setSession({
-      user: {
-        id: "cached_usr_1",
-        role: "customer",
-      },
-    });
-
-    mockUseSession.mockReturnValue({
-      data: null,
-      isPending: true,
-      error: null,
-    });
-
-    const { result } = renderHook(() => useAuth());
-
-    expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.isLoading).toBe(false);
-  });
-
   it("clears state and calls logout endpoints when logout() is invoked", async () => {
-    authStore.setSession({
-      user: {
-        id: "usr_to_logout",
-        role: "customer",
+    mockUseSession.mockReturnValue({
+      data: {
+        user: {
+          id: "usr_to_logout",
+          role: "customer",
+        },
       },
-      token: "token_to_clear",
+      isPending: false,
+      error: null,
     });
     setAuthToken("token_to_clear");
 
@@ -218,9 +197,5 @@ describe("useAuth Hook (src/features/auth/hooks/useAuth.ts)", () => {
 
     // Verify tokens were cleared
     expect(getAuthToken()).toBeNull();
-
-    // Verify Zustand store was reset
-    expect(useAuthStore.getState().isAuthenticated).toBe(false);
-    expect(useAuthStore.getState().user).toBeNull();
   });
 });

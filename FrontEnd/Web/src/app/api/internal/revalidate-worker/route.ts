@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { env } from "@/env";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +24,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
  */
 
 export const REVALIDATION_SECRET =
+  process.env.INTERNAL_REVALIDATE_SECRET ||
+  env.INTERNAL_REVALIDATE_SECRET ||
   process.env.REVALIDATION_SECRET ||
   process.env.INTERNAL_API_SECRET ||
   "development-internal-revalidation-secret";

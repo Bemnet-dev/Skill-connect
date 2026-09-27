@@ -3,7 +3,6 @@
 import { useMutation, UseMutationOptions, UseMutationResult } from "@tanstack/react-query";
 import { verifyOtp } from "../api";
 import { VerifyOtpInput, SessionResponse } from "../schema";
-import { authStore } from "@/state/store/authStore";
 import { toast } from "@/state/store/uiStore";
 import { isApiError } from "@/lib/api-client";
 
@@ -12,7 +11,8 @@ import { isApiError } from "@/lib/api-client";
  * useVerifyOtp Hook
  * ─────────────────────────────────────────────────────────────────────────────
  * TanStack mutation hook wrapping verifyOtp() to verify code and sign in.
- * On success, invokes authStore.setSession(data) — logging the user in.
+ * Session state is authoritatively tracked via Better Auth cookies and
+ * reactive client reads at the call site.
  * Automatically dispatches an error feedback toast on failure.
  */
 
@@ -49,11 +49,6 @@ export function useVerifyOtp(
     mutationFn: (variables: VerifyOtpVariables) => verifyOtp(variables),
     ...restOptions,
     onSuccess: (...args) => {
-      const [data] = args;
-      // ── Canonical Login Action ──────────────────────────────────────────────
-      // Updates the reactive auth store with the authenticated session & user
-      authStore.setSession(data);
-
       if (onSuccess) {
         (onSuccess as (...a: typeof args) => unknown)(...args);
       }

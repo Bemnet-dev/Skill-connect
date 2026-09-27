@@ -35,6 +35,12 @@ export const env = createEnv({
     AUTH_JWT_ISSUER: z.string().default("skill-connect"),
     AUTH_JWT_AUDIENCE: z.string().default("skill-connect-api"),
     AUTH_JWT_EXPIRY: z.string().default("15m"),
+
+    // Internal On-Demand ISR Cache Invalidation Secret
+    INTERNAL_REVALIDATE_SECRET: z
+      .string()
+      .min(1, "INTERNAL_REVALIDATE_SECRET must not be empty")
+      .default("development-internal-revalidation-secret"),
   },
 
   /**
@@ -63,6 +69,7 @@ export const env = createEnv({
     AUTH_JWT_ISSUER: process.env.AUTH_JWT_ISSUER,
     AUTH_JWT_AUDIENCE: process.env.AUTH_JWT_AUDIENCE,
     AUTH_JWT_EXPIRY: process.env.AUTH_JWT_EXPIRY,
+    INTERNAL_REVALIDATE_SECRET: process.env.INTERNAL_REVALIDATE_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
     NEXT_PUBLIC_SIGNALR_HUB_URL: process.env.NEXT_PUBLIC_SIGNALR_HUB_URL,

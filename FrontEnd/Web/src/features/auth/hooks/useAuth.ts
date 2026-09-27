@@ -3,14 +3,11 @@
 import * as React from "react";
 import { useSession, authClient } from "@/lib/auth-client";
 import {
-  useAuthStore,
-  deriveAuthState,
   getPermissionsForRole,
-  type User,
-  type UserRole,
   type Permission,
-  type BetterAuthSessionData,
-} from "@/state/store/authStore";
+} from "@/features/auth/permissions";
+import type { UserRole } from "@/features/auth/schema";
+import type { User } from "@/features/auth/types";
 import { logout as authApiLogout } from "@/features/auth/api";
 import { clearAuthTokens, getAuthToken } from "@/lib/api-client";
 
@@ -51,83 +48,63 @@ export interface UseAuthReturn {
  * useAuth Hook
  * ─────────────────────────────────────────────────────────────────────────────
  * Read-only convenience hook exposing reactive session state (`user`,
- * `isAuthenticated`, `role`, `userId`, `permissions`, `isLoading`) that every
- * page and layout component across customer, worker, and admin portals uses to
- * check authentication and authorization status.
- *
- * Integrates directly with Better Auth's reactive `useSession()` client hook
- * while maintaining synchronized derived reads in the thin Zustand `authStore`.
- *
- * @example
- * ```tsx
- * // Simple session gate
- * const { user, isAuthenticated, isLoading } = useAuth();
- * if (isLoading) return <LoadingSpinner />;
- * if (!isAuthenticated) return <LoginPrompt />;
- *
- * // Role-based access control
- * const { role, hasPermission } = useAuth();
- * if (role === "admin" && hasPermission("admin:access")) {
- *   return <AdminDashboard />;
- * }
- * ```
+ * `isAuthenticated`, `role`, `userId`, `permissions`, `isLoading`) reading
+ * directly from Better Auth's reactive `useSession()` at the call site.
  */
 export function useAuth(): UseAuthReturn {
-  // 1. Reactive Better Auth session read
+  // 1. Reactive Better Auth session read directly at the call site
   const sessionResult = useSession();
 
-  // 2. Reactive Zustand store read
-  const storeUser = useAuthStore((state) => state.user);
-  const storeIsAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const storeRole = useAuthStore((state) => state.role);
-  const storeUserId = useAuthStore((state) => state.userId);
-  const storePermissions = useAuthStore((state) => state.permissions);
-  const storeToken = useAuthStore((state) => state.token);
-  const storeIsLoading = useAuthStore((state) => state.isLoading);
-
-  // 3. Keep Zustand store synchronized with Better Auth reactive session
-  React.useEffect(() => {
-    if (
-      sessionResult?.data &&
-      typeof sessionResult.data === "object" &&
-      "user" in sessionResult.data
-    ) {
-      const sessionData = sessionResult.data as BetterAuthSessionData;
-      if (sessionData.user?.id) {
-        useAuthStore.getState().syncFromSession(sessionData);
-      }
-    }
-  }, [sessionResult?.data]);
-
-  // 4. Derive resolved user and session state
-  const rawSessionUser = (sessionResult?.data as BetterAuthSessionData | undefined)?.user;
-  const hasValidSessionUser = Boolean(rawSessionUser && rawSessionUser.id);
+  // 2. Derive resolved user and session state
+  const rawSessionData = sessionResult?.data;
+  const rawSessionUser =
+    rawSessionData && typeof rawSessionData === "object" && "user" in rawSessionData
+      ? (rawSessionData as { user?: Record<string, unknown> }).user
+      : null;
 
   const { user, role, userId, permissions, isAuthenticated } = React.useMemo(() => {
-    if (hasValidSessionUser && sessionResult?.data) {
-      const derived = deriveAuthState(
-        sessionResult.data as BetterAuthSessionData,
-        sessionResult?.isPending ?? false
-      );
-      return {
-        user: derived.user,
-        role: derived.role,
-        userId: derived.userId,
-        permissions: derived.permissions,
-        isAuthenticated: true,
-      };
-    }
+    if (rawSessionUser && rawSessionUser.id) {
+      const resolvedRole: UserRole =
+        (typeof rawSessionUser.role === "string"
+          ? (rawSessionUser.role.toLowerCase() as UserRole)
+          : undefined) || "customer";
 
-    if (storeUser && storeUser.id && storeIsAuthenticated) {
-      const resolvedRole = storeRole ?? storeUser.role;
-      return {
-        user: storeUser,
+      const normalizedUser: User = {
+        id: String(rawSessionUser.id),
+        name: rawSessionUser.name ? String(rawSessionUser.name) : null,
+        fullName: rawSessionUser.fullName
+          ? String(rawSessionUser.fullName)
+          : rawSessionUser.name
+          ? String(rawSessionUser.name)
+          : null,
+        email: rawSessionUser.email ? String(rawSessionUser.email) : null,
         role: resolvedRole,
-        userId: storeUserId ?? storeUser.id,
-        permissions:
-          storePermissions && storePermissions.length > 0
-            ? storePermissions
-            : getPermissionsForRole(resolvedRole),
+        image: rawSessionUser.image ? String(rawSessionUser.image) : null,
+        avatarUrl: rawSessionUser.avatarUrl
+          ? String(rawSessionUser.avatarUrl)
+          : rawSessionUser.image
+          ? String(rawSessionUser.image)
+          : null,
+        phone: rawSessionUser.phone
+          ? String(rawSessionUser.phone)
+          : rawSessionUser.phoneNumber
+          ? String(rawSessionUser.phoneNumber)
+          : undefined,
+        phoneNumber: rawSessionUser.phoneNumber
+          ? String(rawSessionUser.phoneNumber)
+          : rawSessionUser.phone
+          ? String(rawSessionUser.phone)
+          : undefined,
+        isVerified: Boolean(rawSessionUser.isVerified),
+        phoneNumberVerified: Boolean(rawSessionUser.phoneNumberVerified),
+        onboardingCompleted: Boolean(rawSessionUser.onboardingCompleted),
+      };
+
+      return {
+        user: normalizedUser,
+        role: resolvedRole,
+        userId: normalizedUser.id,
+        permissions: getPermissionsForRole(resolvedRole),
         isAuthenticated: true,
       };
     }
@@ -139,32 +116,21 @@ export function useAuth(): UseAuthReturn {
       permissions: [] as Permission[],
       isAuthenticated: false,
     };
-  }, [
-    hasValidSessionUser,
-    sessionResult?.data,
-    sessionResult?.isPending,
-    storeUser,
-    storeIsAuthenticated,
-    storeRole,
-    storeUserId,
-    storePermissions,
-  ]);
+  }, [rawSessionUser]);
 
-  // 5. Compute combined loading state
-  const isSessionPending = Boolean(sessionResult?.isPending);
-  const isLoading = storeIsLoading || (isSessionPending && !isAuthenticated);
+  // 3. Compute loading state
+  const isLoading = Boolean(sessionResult?.isPending);
 
-  // 6. Resolve token
-  const token =
-    storeToken || (typeof window !== "undefined" ? getAuthToken() : null);
+  // 4. Resolve token
+  const token = typeof window !== "undefined" ? getAuthToken() : null;
 
-  // 7. Check permission callback
+  // 5. Check permission callback
   const hasPermission = React.useCallback(
     (permission: Permission): boolean => permissions.includes(permission),
     [permissions]
   );
 
-  // 8. Sign out convenience handler
+  // 6. Sign out convenience handler
   const logout = React.useCallback(async (): Promise<void> => {
     try {
       await authApiLogout();
@@ -172,7 +138,6 @@ export function useAuth(): UseAuthReturn {
       // Backend sign-out endpoint may be unavailable or offline; proceed with local teardown
     } finally {
       clearAuthTokens();
-      useAuthStore.getState().reset();
       if (typeof authClient?.signOut === "function") {
         try {
           await authClient.signOut();

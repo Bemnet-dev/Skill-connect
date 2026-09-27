@@ -62,15 +62,17 @@ export function setSmsDispatcher(dispatcher: SmsDispatcher | null) {
   activeSmsDispatcher = dispatcher;
 }
 
+export const AUTH_SECRET =
+  process.env.BETTER_AUTH_SECRET ||
+  "development-secret-skill-connect-auth-token-32-chars-minimum";
+
 export const auth = betterAuth({
   appName: "Skill-Connect",
   baseURL:
     process.env.BETTER_AUTH_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     "http://localhost:3000",
-  secret:
-    process.env.BETTER_AUTH_SECRET ||
-    "development-secret-skill-connect-auth-token-32-chars-minimum",
+  secret: AUTH_SECRET,
   trustedOrigins: [
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     "http://localhost:3000",
@@ -78,6 +80,12 @@ export const auth = betterAuth({
     "http://localhost:5001",
   ],
   database: memoryAdapter(memoryStore),
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes cache TTL
+    },
+  },
   user: {
     additionalFields: {
       role: {
