@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { type WorkerSummary } from "../schema";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { buttonVariants } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -311,11 +311,15 @@ export function ResultsMap({
               </span>
             </div>
 
-            <Link href={`/workers/${activeWorker.id}`}>
-              <Button size="sm" variant="primary" className="h-7 text-xs px-2.5 gap-1">
-                <span>View</span>
-                <ArrowRight className="h-3 w-3" />
-              </Button>
+            <Link
+              href={`/workers/${activeWorker.id}`}
+              className={cn(
+                buttonVariants({ size: "sm", variant: "primary" }),
+                "h-7 text-xs px-2.5 gap-1"
+              )}
+            >
+              <span>View</span>
+              <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
         </div>

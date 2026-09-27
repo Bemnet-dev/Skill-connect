@@ -171,4 +171,34 @@ describe("WorkerCard Component (src/features/discovery/components/WorkerCard.tsx
     expect(clickMock).toHaveBeenCalledTimes(1);
     expect(clickMock).toHaveBeenCalledWith(baseWorker);
   });
+
+  it("renders extended discovery fields (bio, languages, serviceRadiusKm, portfolio)", () => {
+    const extendedWorker: WorkerSummary = {
+      ...baseWorker,
+      bio: "10+ years wiring commercial buildings and home smart setups in Addis Ababa.",
+      languages: ["English", "Amharic"],
+      serviceRadiusKm: 35,
+      portfolio: [
+        { id: "p1", title: "Solar Villa", imageUrl: "https://example.com/solar.jpg" },
+        "https://example.com/backup.jpg",
+      ],
+    };
+
+    render(<WorkerCard worker={extendedWorker} />);
+
+    expect(
+      screen.getByText("10+ years wiring commercial buildings and home smart setups in Addis Ababa.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("English, Amharic")).toBeInTheDocument();
+    expect(screen.getByText("Serves 35 km")).toBeInTheDocument();
+    expect(screen.getByText("2 portfolio work samples")).toBeInTheDocument();
+  });
+
+  it("renders a semantic link to profile when onBook is not provided", () => {
+    render(<WorkerCard worker={baseWorker} />);
+
+    const profileLink = screen.getByRole("link", { name: /view profile/i });
+    expect(profileLink).toBeInTheDocument();
+    expect(profileLink).toHaveAttribute("href", "/workers/wkr_test_101");
+  });
 });

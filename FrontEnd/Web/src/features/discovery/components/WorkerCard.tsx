@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { type WorkerSummary } from "../schema";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonVariants } from "@/components/ui/Button";
 import { WORKER_CATEGORY_LABELS, WorkerCategory } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -278,7 +278,14 @@ export function WorkerCard({
             )}
           </div>
 
-          {/* Metrics Row: Rating, Distance, Location, Completed Jobs */}
+          {/* Worker Biography */}
+          {worker.bio && (
+            <p className="text-xs text-gray-600 line-clamp-2 pt-0.5 leading-relaxed">
+              {worker.bio}
+            </p>
+          )}
+
+          {/* Metrics Row: Rating, Distance, Location, Service Radius, Completed Jobs */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-gray-600">
             {/* Rating */}
             <div
@@ -300,6 +307,14 @@ export function WorkerCard({
                   <MapPin className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                   <span>{distanceFormatted}</span>
                 </div>
+              </>
+            )}
+
+            {/* Service Radius */}
+            {typeof worker.serviceRadiusKm === "number" && (
+              <>
+                <span className="text-gray-300">•</span>
+                <span className="text-gray-500">Serves {worker.serviceRadiusKm} km</span>
               </>
             )}
 
@@ -333,6 +348,21 @@ export function WorkerCard({
               </>
             )}
           </div>
+
+          {/* Languages Spoken */}
+          {worker.languages && worker.languages.length > 0 && (
+            <div className="flex items-center gap-1.5 pt-1 text-[11px] text-gray-500">
+              <span className="text-gray-400">Languages:</span>
+              <span className="font-medium text-gray-700">{worker.languages.join(", ")}</span>
+            </div>
+          )}
+
+          {/* Portfolio Showcase Indicator */}
+          {worker.portfolio && worker.portfolio.length > 0 && (
+            <div className="flex items-center gap-1.5 pt-0.5 text-[11px] text-primary font-medium">
+              <span>{worker.portfolio.length} portfolio {worker.portfolio.length === 1 ? "work sample" : "work samples"}</span>
+            </div>
+          )}
 
           {/* Skills Tags */}
           {worker.skills && worker.skills.length > 0 && (
@@ -387,7 +417,7 @@ export function WorkerCard({
 
         {/* Action Button */}
         <div className={cn("flex items-center gap-2", layout === "list" && "md:mt-3")}>
-          <Link href={profileHref} className="block">
+          {onBook ? (
             <Button
               variant="outline"
               size="sm"
@@ -397,7 +427,18 @@ export function WorkerCard({
               <span>View Profile</span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0" />
             </Button>
-          </Link>
+          ) : (
+            <Link
+              href={profileHref}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "gap-1.5 font-semibold text-xs border-primary/30 text-primary hover:bg-primary hover:text-white"
+              )}
+            >
+              <span>View Profile</span>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+            </Link>
+          )}
         </div>
       </div>
     </article>
