@@ -28,8 +28,29 @@ export const env = createEnv({
     BETTER_AUTH_SECRET: z
       .string()
       .min(1, "BETTER_AUTH_SECRET must not be empty")
-      .default("development-secret-skill-connect-auth-token-32-chars-minimum"),
+      .default("development-secret-skill-connect-auth-token-32-chars-minimum")
+      .superRefine((val, ctx) => {
+        if (process.env.NODE_ENV === "production") {
+          if (
+            val ===
+            "development-secret-skill-connect-auth-token-32-chars-minimum"
+          ) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                "BETTER_AUTH_SECRET must not use the development placeholder in production.",
+            });
+          }
+          if (val.length < 32) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `BETTER_AUTH_SECRET must be at least 32 characters long in production (received ${val.length}).`,
+            });
+          }
+        }
+      }),
     BETTER_AUTH_URL: z.string().url().default("http://localhost:3000"),
+    BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
 
     // Better Auth JWT Plugin Settings for downstream C# backend interop
     AUTH_JWT_ISSUER: z.string().default("skill-connect"),
@@ -64,8 +85,10 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
-    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+    BETTER_AUTH_SECRET:
+      process.env.BETTER_AUTH_SECRET || process.env.AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+    BETTER_AUTH_TRUSTED_ORIGINS: process.env.BETTER_AUTH_TRUSTED_ORIGINS,
     AUTH_JWT_ISSUER: process.env.AUTH_JWT_ISSUER,
     AUTH_JWT_AUDIENCE: process.env.AUTH_JWT_AUDIENCE,
     AUTH_JWT_EXPIRY: process.env.AUTH_JWT_EXPIRY,

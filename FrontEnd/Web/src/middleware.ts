@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getCookieCache } from "better-auth/cookies";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { base64Url } from "@better-auth/utils/base64";
-import { AUTH_SECRET } from "@/lib/auth-server";
+import { env } from "@/env";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -117,24 +117,44 @@ export function hasBetterAuthSessionCookie(request: NextRequest): boolean {
  */
 export async function getCachedSession(
   request: NextRequest,
-  secret: string = AUTH_SECRET
+  secret: string = env.BETTER_AUTH_SECRET
 ): Promise<CachedSessionPayload | null> {
   try {
-    // 1. Attempt retrieval with standard cookie name (development / HTTP)
-    let cached = (await getCookieCache(request, {
-      secret,
-      isSecure: false,
-    })) as CachedSessionPayload | null;
+    const hasSecureData = Boolean(
+      request.cookies.get(SECURE_BETTER_AUTH_SESSION_DATA_COOKIE)?.value?.trim()
+    );
+    const hasStandardData = Boolean(
+      request.cookies.get(BETTER_AUTH_SESSION_DATA_COOKIE)?.value?.trim()
+    );
 
-    // 2. Attempt retrieval with __Secure- prefix (production / HTTPS)
-    if (!cached) {
-      cached = (await getCookieCache(request, {
+    // 1. If secure cookie exists (production / HTTPS), decode it directly
+    if (hasSecureData) {
+      const cached = (await getCookieCache(request, {
         secret,
         isSecure: true,
       })) as CachedSessionPayload | null;
+      if (cached) return cached;
     }
 
-    return cached;
+    // 2. If standard cookie exists (development / HTTP), decode it directly
+    if (hasStandardData) {
+      const cached = (await getCookieCache(request, {
+        secret,
+        isSecure: false,
+      })) as CachedSessionPayload | null;
+      if (cached) return cached;
+    }
+
+    // 3. Fallback: if custom prefix or neither standard matched directly
+    if (!hasSecureData && !hasStandardData) {
+      const fallback = (await getCookieCache(request, {
+        secret,
+        isSecure: false,
+      })) as CachedSessionPayload | null;
+      return fallback;
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -147,7 +167,7 @@ export async function getCachedSession(
 export async function createMockCookieCache({
   user,
   session,
-  secret = AUTH_SECRET,
+  secret = env.BETTER_AUTH_SECRET,
   expiresIn = 300,
 }: {
   user: { id?: string; email?: string; name?: string; role?: string };
@@ -219,12 +239,24 @@ function matchesPath(pathname: string, paths: string[]): boolean {
 }
 
 /**
- * Validates that a callback URL is a safe local relative path (preventing open redirects)
+ * Validates that a callback URL is a safe local relative path (preventing open redirects).
+ * Strictly guards against protocol-relative (//) and backslash-escaping (/\\) bypasses.
  */
-function getSafeCallbackUrl(urlParam: string | null): string | null {
+export function getSafeCallbackUrl(urlParam: string | null): string | null {
   if (!urlParam) return null;
-  if (urlParam.startsWith("/") && !urlParam.startsWith("//")) {
-    return urlParam;
+  if (
+    urlParam.startsWith("/") &&
+    !urlParam.startsWith("//") &&
+    !urlParam.startsWith("/\\")
+  ) {
+    try {
+      const parsed = new URL(urlParam, "http://localhost");
+      if (parsed.origin === "http://localhost" && parsed.pathname.startsWith("/")) {
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+    } catch {
+      return null;
+    }
   }
   return null;
 }
@@ -259,7 +291,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // 1. Unauthenticated user accessing any protected route -> redirect to /login
   if (isProtected && !isAuthenticated) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -268,7 +301,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   if (isAuthRoute && isAuthenticated) {
     const callbackUrl = getSafeCallbackUrl(request.nextUrl.searchParams.get("callbackUrl"));
     const target = callbackUrl || getRoleHomeRoute(role);
-    return NextResponse.redirect(new URL(target, request.url));
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = target.split("?")[0];
+    const queryIdx = target.indexOf("?");
+    redirectUrl.search = queryIdx !== -1 ? target.slice(queryIdx) : "";
+    return NextResponse.redirect(redirectUrl);
   }
 
   // 3. Role-based Route Guards for Authenticated Users:
@@ -278,14 +315,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       if (role !== "admin") {
         // Forbidden for non-admins: redirect to role-authorized home
         const target = getRoleHomeRoute(role);
-        return NextResponse.redirect(new URL(target, request.url));
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = target;
+        redirectUrl.search = "";
+        return NextResponse.redirect(redirectUrl);
       }
     }
 
     // Worker routes: 'customer' accounts redirected to customer bookings
     if (isWorkerRoute) {
       if (role === "customer") {
-        return NextResponse.redirect(new URL("/bookings", request.url));
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = "/bookings";
+        redirectUrl.search = "";
+        return NextResponse.redirect(redirectUrl);
       }
     }
   }
@@ -296,14 +339,17 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
+     * Match all request paths except for:
      * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * - favicon.ico, sitemap.xml, robots.txt
+     * - static files with extensions (e.g. hero-img.png, logo.svg)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\..*$).*)",
   ],
 };
 
 export default middleware;
+
+

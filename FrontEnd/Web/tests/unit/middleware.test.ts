@@ -16,6 +16,8 @@ import {
   ADMIN_PATHS,
   WORKER_PATHS,
   CUSTOMER_PATHS,
+  getSafeCallbackUrl,
+  config,
 } from "@/middleware";
 
 function createMockRequest(
@@ -475,6 +477,60 @@ describe("middleware (Edge Route Guards & Better Auth CookieCache)", () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get("location")).toBeNull();
+    });
+  });
+
+  describe("Security: getSafeCallbackUrl()", () => {
+    it("accepts valid relative local paths with queries and fragments", () => {
+      expect(getSafeCallbackUrl("/bookings")).toBe("/bookings");
+      expect(getSafeCallbackUrl("/profile?tab=security#email")).toBe("/profile?tab=security#email");
+    });
+
+    it("rejects null or empty callback URLs", () => {
+      expect(getSafeCallbackUrl(null)).toBeNull();
+      expect(getSafeCallbackUrl("")).toBeNull();
+    });
+
+    it("rejects absolute external URLs", () => {
+      expect(getSafeCallbackUrl("https://evil.com")).toBeNull();
+      expect(getSafeCallbackUrl("http://evil.com/phishing")).toBeNull();
+    });
+
+    it("rejects protocol-relative URLs", () => {
+      expect(getSafeCallbackUrl("//evil.com")).toBeNull();
+      expect(getSafeCallbackUrl("//evil.com/path")).toBeNull();
+    });
+
+    it("rejects backslash-escaped protocol-relative bypasses", () => {
+      expect(getSafeCallbackUrl("/\\evil.com")).toBeNull();
+      expect(getSafeCallbackUrl("/\\\\evil.com")).toBeNull();
+    });
+  });
+
+  describe("Performance: config.matcher", () => {
+    it("defines an array with single negative lookahead matcher string", () => {
+      expect(Array.isArray(config.matcher)).toBe(true);
+      expect(config.matcher).toHaveLength(1);
+    });
+
+    it("excludes static image and asset extensions from triggering middleware", () => {
+      const matcherPattern = new RegExp(`^${config.matcher[0]}$`);
+
+      // Route paths that SHOULD match middleware
+      expect(matcherPattern.test("/")).toBe(true);
+      expect(matcherPattern.test("/dashboard")).toBe(true);
+      expect(matcherPattern.test("/login")).toBe(true);
+      expect(matcherPattern.test("/bookings/123")).toBe(true);
+
+      // Static assets and internal routes that SHOULD NOT match middleware
+      expect(matcherPattern.test("/api/auth/session")).toBe(false);
+      expect(matcherPattern.test("/_next/static/chunks/main.js")).toBe(false);
+      expect(matcherPattern.test("/_next/image?url=hero.png")).toBe(false);
+      expect(matcherPattern.test("/favicon.ico")).toBe(false);
+      expect(matcherPattern.test("/hero-img.png")).toBe(false);
+      expect(matcherPattern.test("/logo.svg")).toBe(false);
+      expect(matcherPattern.test("/robots.txt")).toBe(false);
+      expect(matcherPattern.test("/sitemap.xml")).toBe(false);
     });
   });
 });

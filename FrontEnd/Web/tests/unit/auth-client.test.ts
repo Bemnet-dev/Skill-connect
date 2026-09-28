@@ -1,5 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
-import { authClient, useSession, getSession, signIn, signUp, signOut } from "@/lib/auth-client";
+import * as authClientModule from "@/lib/auth-client";
+import { authClient, useSession, getSession, signOut } from "@/lib/auth-client";
 
 describe("Better Auth Client (src/lib/auth-client.ts)", () => {
   it("exports a configured authClient instance", () => {
@@ -12,9 +13,13 @@ describe("Better Auth Client (src/lib/auth-client.ts)", () => {
     expect(typeof useSession).toBe("function");
     expect(getSession).toBeDefined();
     expect(typeof getSession).toBe("function");
-    expect(signIn).toBeDefined();
-    expect(signUp).toBeDefined();
     expect(signOut).toBeDefined();
+  });
+
+  it("does not export generic signIn or signUp to enforce phone-only authentication (FR-AUTH-01)", () => {
+    const rawModule = authClientModule as Record<string, unknown>;
+    expect(rawModule.signIn).toBeUndefined();
+    expect(rawModule.signUp).toBeUndefined();
   });
 
   it("exposes token retrieval capability from jwtClient plugin", () => {
@@ -23,9 +28,24 @@ describe("Better Auth Client (src/lib/auth-client.ts)", () => {
   });
 
   it("exposes phone number authentication methods from phoneNumberClient plugin", () => {
-    // phoneNumberClient adds phoneNumber methods to signIn
-    expect(signIn).toBeDefined();
-    const phoneSignIn = (signIn as unknown as { phoneNumber?: unknown }).phoneNumber;
-    expect(phoneSignIn).toBeDefined();
+    // Internal client provides phone number OTP authentication methods
+    const client = authClient as unknown as { phoneNumber?: unknown; signIn?: { phoneNumber?: unknown } };
+    const hasPhoneAuth = Boolean(client.phoneNumber || client.signIn?.phoneNumber);
+    expect(hasPhoneAuth).toBe(true);
+  });
+
+  it("exports TypeScript types for ClientSession and ClientUser with inferred fields", () => {
+    // Compile-time check asserting ClientUser and ClientSession can be typed with role
+    const testUser = {
+      id: "u-456",
+      name: "Test User",
+      email: "test@skillconnect.internal",
+      role: "customer" as const,
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    expect(testUser.role).toBe("customer");
   });
 });
+

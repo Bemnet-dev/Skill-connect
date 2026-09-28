@@ -19,7 +19,15 @@ import {
   BOOKING_STATUSES,
   BOOKING_STATUS_LABELS,
   BOOKING_STATUSES_LIST,
+  USER_ROLES,
+  USER_ROLE_LABELS,
+  USER_ROLES_LIST,
+  CURRENCIES,
+  CURRENCY_SYMBOLS,
+  CURRENCIES_LIST,
+  DEFAULT_CURRENCY,
   STALE_TIME,
+  GC_TIME,
   DEBOUNCE_MS,
 } from '@/lib/constants';
 
@@ -48,8 +56,11 @@ describe('Route Constants', () => {
       expect(ROUTES.ADMIN.DISPUTES).toBe('/disputes');
     });
 
-    it('should have home route', () => {
+    it('should have home route and common account routes', () => {
       expect(ROUTES.HOME).toBe('/');
+      expect(ROUTES.PROFILE).toBe('/profile');
+      expect(ROUTES.SETTINGS).toBe('/settings');
+      expect(ROUTES.ONBOARDING).toBe('/onboarding');
     });
   });
 
@@ -72,6 +83,13 @@ describe('Route Constants', () => {
     it('getJobDetailRoute should generate correct path', () => {
       expect(getJobDetailRoute('job321')).toBe('/jobs/job321');
       expect(getJobDetailRoute('job-def-789')).toBe('/jobs/job-def-789');
+    });
+
+    it('encodes special characters safely in route helpers', () => {
+      expect(getWorkerProfileRoute('worker/special')).toBe('/workers/worker%2Fspecial');
+      expect(getBookingDetailRoute('booking#123')).toBe('/bookings/booking%23123');
+      expect(getChatThreadRoute('thread?query=1')).toBe('/chat/thread%3Fquery%3D1');
+      expect(getJobDetailRoute('job name')).toBe('/jobs/job%20name');
     });
   });
 
@@ -154,6 +172,14 @@ describe('Validation Constants', () => {
 
     it('should have min less than max', () => {
       expect(VALIDATION.USERNAME.MIN_LENGTH).toBeLessThan(VALIDATION.USERNAME.MAX_LENGTH);
+    });
+  });
+
+  describe('OTP', () => {
+    it('should have correct OTP length, expiration, and attempts', () => {
+      expect(VALIDATION.OTP.LENGTH).toBe(6);
+      expect(VALIDATION.OTP.EXPIRES_IN_SECONDS).toBe(300);
+      expect(VALIDATION.OTP.MAX_ATTEMPTS).toBe(3);
     });
   });
 
@@ -451,6 +477,59 @@ describe('Debounce Delays Constants', () => {
       expect(Number.isInteger(ms)).toBe(true);
       expect(ms).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('User Roles Constants', () => {
+  it('should define all platform authorization roles', () => {
+    expect(USER_ROLES.CUSTOMER).toBe('customer');
+    expect(USER_ROLES.WORKER).toBe('worker');
+    expect(USER_ROLES.ADMIN).toBe('admin');
+  });
+
+  it('should have unique values across all roles', () => {
+    const values = Object.values(USER_ROLES);
+    const uniqueValues = new Set(values);
+    expect(values.length).toBe(uniqueValues.size);
+    expect(USER_ROLES_LIST).toEqual(values);
+  });
+
+  it('should have descriptive labels for every role', () => {
+    Object.values(USER_ROLES).forEach((role) => {
+      expect(USER_ROLE_LABELS[role]).toBeDefined();
+      expect(typeof USER_ROLE_LABELS[role]).toBe('string');
+      expect(USER_ROLE_LABELS[role].length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('Currencies Constants', () => {
+  it('should define supported currencies and default', () => {
+    expect(CURRENCIES.USD).toBe('USD');
+    expect(CURRENCIES.ETB).toBe('ETB');
+    expect(DEFAULT_CURRENCY).toBe('USD');
+    expect(CURRENCIES_LIST).toEqual(['USD', 'ETB']);
+  });
+
+  it('should have display symbols for each currency', () => {
+    expect(CURRENCY_SYMBOLS.USD).toBe('$');
+    expect(CURRENCY_SYMBOLS.ETB).toBe('ETB ');
+  });
+});
+
+describe('GC Time Constants (React Query)', () => {
+  it('should define standardized garbage collection tiers', () => {
+    expect(GC_TIME.SHORT).toBe(300000); // 5 min
+    expect(GC_TIME.DEFAULT).toBe(900000); // 15 min
+    expect(GC_TIME.MEDIUM).toBe(3600000); // 1 hour
+    expect(GC_TIME.LONG).toBe(86400000); // 24 hours
+    expect(GC_TIME.MAX).toBe(86400000);
+  });
+
+  it('should ensure GC_TIME is greater than or equal to corresponding STALE_TIME', () => {
+    expect(GC_TIME.SHORT).toBeGreaterThanOrEqual(STALE_TIME.SHORT);
+    expect(GC_TIME.DEFAULT).toBeGreaterThanOrEqual(STALE_TIME.DEFAULT);
+    expect(GC_TIME.MEDIUM).toBeGreaterThanOrEqual(STALE_TIME.MEDIUM);
   });
 });
 

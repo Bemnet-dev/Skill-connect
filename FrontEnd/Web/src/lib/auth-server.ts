@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { env } from "@/env";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -28,9 +29,9 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 
 export const AUTH_CONFIG = {
   jwt: {
-    issuer: process.env.AUTH_JWT_ISSUER || process.env.BETTER_AUTH_URL || "skill-connect",
-    audience: process.env.AUTH_JWT_AUDIENCE || "skill-connect-api",
-    expirationTime: process.env.AUTH_JWT_EXPIRY || "15m",
+    issuer: env.AUTH_JWT_ISSUER,
+    audience: env.AUTH_JWT_AUDIENCE,
+    expirationTime: env.AUTH_JWT_EXPIRY,
   },
   phone: {
     otpLength: 6,
@@ -62,23 +63,108 @@ export function setSmsDispatcher(dispatcher: SmsDispatcher | null) {
   activeSmsDispatcher = dispatcher;
 }
 
-export const AUTH_SECRET =
-  process.env.BETTER_AUTH_SECRET ||
-  "development-secret-skill-connect-auth-token-32-chars-minimum";
+/**
+ * Normalizes phone numbers to a consistent digit representation for temp email generation.
+ * Handles local 09... and international +2519... formats cleanly to prevent duplicate accounts.
+ */
+export function normalizePhoneForTempEmail(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) {
+    return String(Date.now());
+  }
+  // If Ethiopian 10 digits starting with 09 (e.g. 0911234567 -> 251911234567)
+  if (digits.length === 10 && digits.startsWith("09")) {
+    return `251${digits.slice(1)}`;
+  }
+  // If Ethiopian 9 digits starting with 9 (e.g. 911234567 -> 251911234567)
+  if (digits.length === 9 && digits.startsWith("9")) {
+    return `251${digits}`;
+  }
+  return digits;
+}
+
+/**
+ * Resolves the authentication secret from the validated environment configuration.
+ * Validation (minimum 32 characters, rejecting dev placeholders in production)
+ * is strictly enforced at startup by the Zod schema in @/env.
+ */
+export function resolveAuthSecret(): string {
+  return env.BETTER_AUTH_SECRET;
+}
+
+export const AUTH_SECRET = resolveAuthSecret();
+
+/**
+ * Resolves trusted browser origins for CSRF and redirect protection.
+ * Uses centralized, validated environment variables from @/env.
+ * Only includes legitimate frontend browser origins, strictly omitting backend API ports.
+ */
+export function resolveTrustedOrigins(): string[] {
+  const isProd = env.NODE_ENV === "production";
+  const origins = new Set<string>();
+
+  // Primary frontend web app URL
+  try {
+    origins.add(new URL(env.NEXT_PUBLIC_APP_URL).origin);
+  } catch {
+    origins.add(env.NEXT_PUBLIC_APP_URL);
+  }
+
+  // Base auth URL if distinct from frontend origin
+  if (env.BETTER_AUTH_URL) {
+    try {
+      origins.add(new URL(env.BETTER_AUTH_URL).origin);
+    } catch {
+      origins.add(env.BETTER_AUTH_URL);
+    }
+  }
+
+  // Optional explicitly configured trusted origins
+  if (env.BETTER_AUTH_TRUSTED_ORIGINS) {
+    env.BETTER_AUTH_TRUSTED_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+      .forEach((origin) => origins.add(origin));
+  }
+
+  // Local development loopback frontend hosts (NOT backend API port 5001)
+  if (!isProd) {
+    origins.add("http://localhost:3000");
+    origins.add("http://127.0.0.1:3000");
+  }
+
+  return Array.from(origins);
+}
 
 export const auth = betterAuth({
   appName: "Skill-Connect",
-  baseURL:
-    process.env.BETTER_AUTH_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "http://localhost:3000",
+  baseURL: env.BETTER_AUTH_URL || env.NEXT_PUBLIC_APP_URL,
   secret: AUTH_SECRET,
-  trustedOrigins: [
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-    "http://localhost:3000",
-    "https://localhost:5001",
-    "http://localhost:5001",
-  ],
+  trustedOrigins: resolveTrustedOrigins(),
+  rateLimit: {
+    enabled: env.NODE_ENV !== "test",
+    window: 60,
+    max: 100,
+    storage: "memory",
+    customRules: {
+      "/api/auth/phone-number/send-otp": {
+        window: 60,
+        max: 3,
+      },
+      "/phone-number/send-otp": {
+        window: 60,
+        max: 3,
+      },
+      "/api/auth/phone-number/verify": {
+        window: 60,
+        max: 5,
+      },
+      "/phone-number/verify": {
+        window: 60,
+        max: 5,
+      },
+    },
+  },
   database: memoryAdapter(memoryStore),
   session: {
     cookieCache: {
@@ -92,7 +178,7 @@ export const auth = betterAuth({
         type: "string",
         required: false,
         defaultValue: "customer",
-        input: true,
+        input: false,
       },
     },
   },
@@ -110,11 +196,16 @@ export const auth = betterAuth({
           console.info(
             `[Better Auth OTP] Destination: ${phoneNumber} | Verification Code: ${code}`
           );
+          return;
         }
+
+        throw new Error(
+          `[Better Auth OTP] Failed to send OTP: No SMS dispatcher configured in production environment (destination: ${phoneNumber}).`
+        );
       },
       signUpOnVerification: {
         getTempEmail: (phone: string) =>
-          `user_${phone.replace(/\D/g, "") || Date.now()}@skillconnect.internal`,
+          `user_${normalizePhoneForTempEmail(phone)}@skillconnect.internal`,
         getTempName: (phone: string) => phone,
       },
     }),

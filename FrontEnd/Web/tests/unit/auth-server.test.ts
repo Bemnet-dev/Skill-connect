@@ -1,12 +1,15 @@
 /**
  * @jest-environment node
  */
-import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals";
 import {
   auth,
   AUTH_CONFIG,
   memoryStore,
   setSmsDispatcher,
+  resolveAuthSecret,
+  resolveTrustedOrigins,
+  normalizePhoneForTempEmail,
   type Session,
   type User,
 } from "@/lib/auth-server";
@@ -91,4 +94,72 @@ describe("Better Auth Server (src/lib/auth-server.ts)", () => {
     expect(dummyUser.id).toBe("u-123");
     expect(dummySession.session?.userId).toBe("u-123");
   });
+
+  describe("Security: resolveAuthSecret()", () => {
+    it("returns BETTER_AUTH_SECRET from centralized validated env", () => {
+      const secret = resolveAuthSecret();
+      expect(secret).toBeDefined();
+      expect(typeof secret).toBe("string");
+      expect(secret.length).toBeGreaterThanOrEqual(32);
+    });
+  });
+
+  describe("Security: resolveTrustedOrigins()", () => {
+    it("includes frontend web localhost development ports in non-production", () => {
+      const origins = resolveTrustedOrigins();
+
+      expect(origins).toContain("http://localhost:3000");
+    });
+
+    it("strictly excludes backend C# API port 5001 from browser CSRF trusted origins", () => {
+      const origins = resolveTrustedOrigins();
+
+      expect(origins).not.toContain("http://localhost:5001");
+      expect(origins).not.toContain("https://localhost:5001");
+    });
+  });
+
+  describe("Security: Rate Limiting & JWT Consistency", () => {
+    it("ensures JWT issuer is 'skill-connect' by default without fallback to BETTER_AUTH_URL", () => {
+      expect(AUTH_CONFIG.jwt.issuer).toBe("skill-connect");
+    });
+
+    it("configures rate limiting rules for OTP send and verify endpoints", () => {
+      const options = auth.options as unknown as {
+        rateLimit?: {
+          enabled?: boolean;
+          customRules?: Record<string, { window: number; max: number }>;
+        };
+      };
+
+      expect(options.rateLimit).toBeDefined();
+      expect(options.rateLimit?.customRules).toBeDefined();
+      expect(options.rateLimit?.customRules?.["/api/auth/phone-number/send-otp"]).toEqual({
+        window: 60,
+        max: 3,
+      });
+      expect(options.rateLimit?.customRules?.["/api/auth/phone-number/verify"]).toEqual({
+        window: 60,
+        max: 5,
+      });
+    });
+  });
+
+  describe("Phone Verification: normalizePhoneForTempEmail()", () => {
+    it("normalizes Ethiopian local 09... and +2519... to identical digit string", () => {
+      const local = normalizePhoneForTempEmail("0911234567");
+      const international = normalizePhoneForTempEmail("+251911234567");
+      const short = normalizePhoneForTempEmail("911234567");
+
+      expect(local).toBe("251911234567");
+      expect(international).toBe("251911234567");
+      expect(short).toBe("251911234567");
+      expect(local).toBe(international);
+    });
+
+    it("strips formatting characters and preserves international numbers", () => {
+      expect(normalizePhoneForTempEmail("+1 (415) 555-2671")).toBe("14155552671");
+    });
+  });
 });
+

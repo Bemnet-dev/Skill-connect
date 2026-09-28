@@ -1,14 +1,18 @@
 import { authClient } from "@/lib/auth-client";
-import { API_TIMEOUTS, STORAGE_KEYS } from "@/lib/constants";
+import { API_TIMEOUTS } from "@/lib/constants";
+import { env } from "@/env";
 
 /**
- * Resolves the API Base URL from environment or defaults
+ * Resolves the API Base URL from environment or explicit override.
+ * Throws if the base URL is not configured (e.g. in misconfigured production environments).
  */
 function getApiBaseUrl(override?: string): string {
-  const base =
-    override ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://localhost:5001";
+  const base = override || env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!base) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
+  }
+
   return base.replace(/\/+$/, "");
 }
 
@@ -112,7 +116,12 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   skipAuth?: boolean;
 
   /**
-   * Skip automatic token re-ask/retry on 401 Unauthorized
+   * Skip automatic token re-acquisition/retry on 401 Unauthorized
+   */
+  skipTokenReacquisition?: boolean;
+
+  /**
+   * Backward-compatible alias for skipTokenReacquisition
    */
   skipAuthRefresh?: boolean;
 
@@ -122,86 +131,66 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   baseUrl?: string;
 
   /**
-   * Internal retry guard to ensure 401 token re-ask is attempted at most once
+   * Internal retry guard to ensure 401 token re-acquisition is attempted at most once
    */
   _retry?: boolean;
 }
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * Token Management & Storage Helpers
+ * In-Memory JWT Access Token Storage & Security Architecture
  * ─────────────────────────────────────────────────────────────────────────────
+ * Authentication Architecture Between Next.js & Downstream C# API:
+ * 1. Master Session (Cookie): Better Auth persists authentication state securely
+ *    in HTTP-only cookies. Browser JavaScript CANNOT read or exfiltrate the master
+ *    session cookie.
+ * 2. Downstream API Authorization (Bearer JWT): To communicate cross-origin with
+ *    the downstream C# API, browser JavaScript requests a short-lived JWT from
+ *    Better Auth (`authClient.token()`) and attaches it to:
+ *      Authorization: Bearer <JWT>
+ *    Because browser JavaScript must read this JWT to set the header, the JWT IS
+ *    necessarily accessible in JavaScript memory during its active lifetime.
+ * 3. Mitigation — Strict In-Memory Storage:
+ *    We store this JWT STRICTLY in a private JavaScript module variable (`inMemoryAccessToken`).
+ *    We NEVER persist it in `localStorage` or `sessionStorage`.
+ *    - Eliminates persistent XSS token theft across tabs, browser restarts, and
+ *      storage-scanning malicious scripts or browser extensions.
+ *    - If the page reloads, the in-memory variable clears, and the client seamlessly
+ *      re-mints a fresh short-lived JWT via the secure HTTP-only session cookie.
  */
 let inMemoryAccessToken: string | null = null;
-let inMemoryRefreshToken: string | null = null;
 
 export function getAuthToken(): string | null {
-  if (inMemoryAccessToken) return inMemoryAccessToken;
-  if (typeof window !== "undefined") {
-    try {
-      return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-    } catch {
-      return null;
-    }
-  }
-  return null;
+  return inMemoryAccessToken;
 }
 
 export function setAuthToken(token: string | null): void {
   inMemoryAccessToken = token;
-  if (typeof window !== "undefined") {
-    try {
-      if (token) {
-        localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      }
-    } catch {
-      // Storage unavailable or disabled
-    }
-  }
-}
-
-export function getRefreshToken(): string | null {
-  if (inMemoryRefreshToken) return inMemoryRefreshToken;
-  if (typeof window !== "undefined") {
-    try {
-      return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-export function setRefreshToken(token: string | null): void {
-  inMemoryRefreshToken = token;
-  if (typeof window !== "undefined") {
-    try {
-      if (token) {
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-      }
-    } catch {
-      // Storage unavailable or disabled
-    }
-  }
 }
 
 export function clearAuthTokens(): void {
-  setAuthToken(null);
-  setRefreshToken(null);
+  inMemoryAccessToken = null;
 }
+
+/** @deprecated Kept for backward compatibility; Better Auth does not use client-side refresh tokens */
+export const getRefreshToken = (): null => null;
+export const setRefreshToken = (_token?: string | null): void => {};
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * Better Auth Client Token Resolution & 401 Re-asking
+ * Better Auth JWT Token Acquisition & 401 Re-acquisition
  * ─────────────────────────────────────────────────────────────────────────────
- * Before each request, apiClient asks Better Auth's client for the current JWT.
- * Better Auth handles session refresh internally via its cookie session lifecycle.
- * On a 401 from the C# API, apiClient re-asks Better Auth for a fresh token once,
- * then gives up.
+ * Before each request, apiClient asks Better Auth's client for a signed JWT
+ * minted from its active HTTP-only session cookie.
+ *
+ * NOTE ON TERMINOLOGY:
+ * Better Auth is session-cookie-backed, NOT a traditional OAuth refresh-token system.
+ * The client does not possess or rotate a refresh token; instead, the browser
+ * provides the HTTP-only session cookie to Better Auth's `/api/auth/token` endpoint,
+ * which issues the short-lived JWT for the downstream C# backend.
+ *
+ * On a 401 from the C# backend, apiClient re-acquires a fresh JWT from Better Auth
+ * once (deduplicating concurrent 401s), retries the request, then gives up.
  */
 export type BetterAuthTokenResolver = (options?: {
   forceRefresh?: boolean;
@@ -233,13 +222,28 @@ export const setCustomRefreshHandler = setBetterAuthTokenResolver;
 export type CustomRefreshHandler = BetterAuthTokenResolver;
 
 /**
- * Asks Better Auth's client for the current JWT.
- * Better Auth manages session refresh internally.
+ * Acquires a JWT from Better Auth's client or the in-memory cache.
+ *
+ * NOTE ON forceRefresh & Better Auth:
+ * Better Auth's client method `activeAuthClient.token()` maps directly to GET /api/auth/token.
+ * On the server, this endpoint takes no options or forceRefresh parameter; it always mints
+ * a fresh signed JWT from the session cookie.
+ *
+ * In this client pipeline, `forceRefresh?: boolean` acts as a client-side cache control:
+ * - When false/omitted: if an in-memory token is already available, it is returned immediately,
+ *   preventing redundant roundtrips to Better Auth's /api/auth/token on every single API request.
+ * - When true (e.g. on 401 Unauthorized): the in-memory cache is bypassed, explicitly asking
+ *   Better Auth to mint a fresh JWT from the session cookie.
  */
 export async function getBetterAuthJwt(options?: {
   forceRefresh?: boolean;
 }): Promise<string | null> {
-  // If an explicit resolver is configured, delegate to it
+  // 1. Return in-memory cached token if present and not forcing refresh
+  if (!options?.forceRefresh && inMemoryAccessToken) {
+    return inMemoryAccessToken;
+  }
+
+  // 2. If an explicit resolver is configured, delegate to it
   if (customTokenResolver) {
     try {
       const token = await customTokenResolver(options);
@@ -253,8 +257,8 @@ export async function getBetterAuthJwt(options?: {
     }
   }
 
+  // 3. Otherwise, query Better Auth's /api/auth/token endpoint
   try {
-    // Better Auth client provides current JWT via the jwtClient plugin
     const { data, error } = await activeAuthClient.token();
     if (!error && data?.token) {
       setAuthToken(data.token);
@@ -264,38 +268,30 @@ export async function getBetterAuthJwt(options?: {
     // Better Auth client error or unauthenticated
   }
 
-  // Fallback to in-memory/localStorage token if available
-  return getAuthToken();
+  // When forceRefresh is requested and Better Auth returns no token, the session is dead
+  if (options?.forceRefresh) {
+    clearAuthTokens();
+    return null;
+  }
+
+  return inMemoryAccessToken;
 }
 
 /**
- * Concurrency-safe token refresh:
- * Multiple concurrent 401s from the C# API reuse a single pending re-ask promise
+ * Concurrency-safe token re-acquisition:
+ * Multiple concurrent 401s from the C# API reuse a single pending re-acquisition promise
  * to avoid duplicate token requests and race conditions.
  */
-let reAskPromise: Promise<string | null> | null = null;
+let reacquirePromise: Promise<string | null> | null = null;
 
-export async function reAskBetterAuthToken(): Promise<string | null> {
-  if (!reAskPromise) {
-    reAskPromise = (async () => {
+export async function reacquireBetterAuthToken(): Promise<string | null> {
+  if (!reacquirePromise) {
+    reacquirePromise = (async () => {
       try {
-        if (customTokenResolver) {
-          const freshToken = await customTokenResolver({ forceRefresh: true });
-          if (freshToken) {
-            setAuthToken(freshToken);
-            return freshToken;
-          }
-          clearAuthTokens();
-          return null;
+        const freshToken = await getBetterAuthJwt({ forceRefresh: true });
+        if (freshToken) {
+          return freshToken;
         }
-
-        // Re-ask Better Auth client for a fresh JWT
-        const { data, error } = await activeAuthClient.token();
-        if (!error && data?.token) {
-          setAuthToken(data.token);
-          return data.token;
-        }
-
         clearAuthTokens();
         return null;
       } catch {
@@ -303,14 +299,15 @@ export async function reAskBetterAuthToken(): Promise<string | null> {
         return null;
       }
     })().finally(() => {
-      reAskPromise = null;
+      reacquirePromise = null;
     });
   }
-  return reAskPromise;
+  return reacquirePromise;
 }
 
-// Backward-compatible alias for existing consumers
-export const silentRefresh = reAskBetterAuthToken;
+// Backward-compatible aliases for existing consumers
+export const reAskBetterAuthToken = reacquireBetterAuthToken;
+export const silentRefresh = reacquireBetterAuthToken;
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -398,6 +395,7 @@ async function request<T = unknown>(
     body,
     timeout = API_TIMEOUTS.DEFAULT,
     skipAuth = false,
+    skipTokenReacquisition = false,
     skipAuthRefresh = false,
     baseUrl,
     _retry = false,
@@ -406,6 +404,7 @@ async function request<T = unknown>(
     ...restOptions
   } = options;
 
+  const shouldSkipReacquisition = skipTokenReacquisition || skipAuthRefresh;
   const url = buildUrl(path, params, baseUrl);
   const headers = new Headers(customHeaders);
 
@@ -425,14 +424,17 @@ async function request<T = unknown>(
   // 2. Prepare Body and Content-Type
   let resolvedBody: BodyInit | undefined;
   if (body !== undefined && body !== null) {
-    if (
-      body instanceof FormData ||
+    if (body instanceof FormData) {
+      resolvedBody = body;
+      // Fetch will automatically generate multipart/form-data with proper boundary;
+      // remove any pre-existing Content-Type to prevent collisions.
+      headers.delete("Content-Type");
+    } else if (
       body instanceof Blob ||
       body instanceof ArrayBuffer ||
       body instanceof URLSearchParams
     ) {
       resolvedBody = body;
-      // Fetch will automatically generate the correct Content-Type (with boundary for FormData)
     } else if (typeof body === "string") {
       resolvedBody = body;
       if (!headers.has("Content-Type")) {
@@ -446,16 +448,30 @@ async function request<T = unknown>(
     }
   }
 
-  // 3. Timeout Controller
+  // 3. Pre-flight Abort Check
+  if (restOptions.signal?.aborted) {
+    throw new ApiError({
+      message: "Request was cancelled",
+      status: 499,
+      statusText: "Client Closed Request",
+      url,
+      method,
+    });
+  }
+
+  // 4. Timeout & AbortSignal Controller
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
   }, timeout);
 
-  // If user provided their own signal, listen to it
+  const handleExternalAbort = () => {
+    controller.abort(restOptions.signal?.reason);
+  };
+
   if (restOptions.signal) {
-    restOptions.signal.addEventListener("abort", () => {
-      controller.abort();
+    restOptions.signal.addEventListener("abort", handleExternalAbort, {
+      once: true,
     });
   }
 
@@ -468,14 +484,19 @@ async function request<T = unknown>(
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
-
-    // 4. On a 401 from the C# API, re-ask Better Auth for a fresh token once, then give up
-    if (response.status === 401 && !_retry && !skipAuthRefresh) {
-      const freshToken = await reAskBetterAuthToken();
+    // 4. Token Re-acquisition on 401 (Authentication Failure Only)
+    // ARCHITECTURE CONTRACT (C# API <-> Next.js Frontend):
+    // • 401 Unauthorized = Authentication problem (token expired, missing, or invalid signature).
+    //   The frontend attempts a single-attempt re-acquisition of a fresh JWT from Better Auth's cookie session.
+    // • 403 Forbidden = Authorization problem (user is authenticated, but lacks required role or permission,
+    //   e.g. customer attempting a worker-only endpoint).
+    //   The frontend MUST NOT perform token re-acquisition on 403 — re-minting a JWT does not alter user role,
+    //   and retrying would waste roundtrips or spuriously wipe the active session.
+    if (response.status === 401 && !_retry && !shouldSkipReacquisition) {
+      const freshToken = await reacquireBetterAuthToken();
 
       if (freshToken) {
-        // Retry the original request once with the refreshed Bearer token
+        // Retry the original request once with the re-acquired Bearer token
         const retryHeaders = new Headers(customHeaders);
         retryHeaders.set("Authorization", `Bearer ${freshToken}`);
 
@@ -486,7 +507,7 @@ async function request<T = unknown>(
         });
       }
 
-      // Re-asking Better Auth gave no token — give up and throw typed 401 ApiError
+      // Re-acquiring from Better Auth yielded no token — session expired or user logged out
       throw new ApiError({
         message: "Session expired or unauthorized. Please log in again.",
         status: 401,
@@ -499,13 +520,11 @@ async function request<T = unknown>(
     // 5. Handle non-2xx Failure Responses (including repeated 401 when _retry is true)
     if (!response.ok) {
       let errorData: ApiProblemDetails | null = null;
-      const contentType = response.headers.get("content-type") || "";
-
-      if (contentType.includes("application/json")) {
-        errorData = await response.json().catch(() => null);
-      } else {
-        const text = await response.text().catch(() => "");
-        if (text) {
+      const text = await response.text().catch(() => "");
+      if (text) {
+        try {
+          errorData = JSON.parse(text);
+        } catch {
           errorData = { detail: text };
         }
       }
@@ -527,17 +546,34 @@ async function request<T = unknown>(
       return undefined as T;
     }
 
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      return (await response.json()) as T;
+    const text = await response.text();
+    if (!text || !text.trim()) {
+      return undefined as T;
     }
 
-    return (await response.text()) as unknown as T;
-  } catch (error: unknown) {
-    clearTimeout(timeoutId);
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        return text as unknown as T;
+      }
+    }
 
+    return text as unknown as T;
+  } catch (error: unknown) {
     if (isApiError(error)) {
       throw error;
+    }
+
+    if (restOptions.signal?.aborted) {
+      throw new ApiError({
+        message: "Request was cancelled",
+        status: 499,
+        statusText: "Client Closed Request",
+        url,
+        method,
+      });
     }
 
     if (error instanceof Error && error.name === "AbortError") {
@@ -558,6 +594,11 @@ async function request<T = unknown>(
       url,
       method,
     });
+  } finally {
+    clearTimeout(timeoutId);
+    if (restOptions.signal) {
+      restOptions.signal.removeEventListener("abort", handleExternalAbort);
+    }
   }
 }
 

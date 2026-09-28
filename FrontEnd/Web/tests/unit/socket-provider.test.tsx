@@ -1,5 +1,5 @@
 import React from "react";
-import { render, renderHook, screen } from "@testing-library/react";
+import { render, renderHook, screen, act } from "@testing-library/react";
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import {
   SocketProvider,
@@ -51,6 +51,19 @@ describe("SocketProvider & Better Auth SignalR accessTokenFactory", () => {
 
       expect(token).toBe("");
     });
+
+    it("accepts an explicit authClient parameter without relying on global state", async () => {
+      const customClient = {
+        token: jest.fn<() => Promise<{ data: { token: string } | null; error: unknown }>>().mockResolvedValueOnce({
+          data: { token: "injected-client-token" },
+          error: null,
+        }),
+      };
+
+      const token = await getSocketAccessToken(customClient as never);
+      expect(token).toBe("injected-client-token");
+      expect(customClient.token).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("SocketProvider Component & useSocket Hook", () => {
@@ -75,7 +88,7 @@ describe("SocketProvider & Better Auth SignalR accessTokenFactory", () => {
       expect(screen.getByTestId("child-element")).toHaveTextContent("Child Content");
     });
 
-    it("provides connection and helper methods to consumers", () => {
+    it("provides connection and helper methods to consumers with isReconnecting state", () => {
       const { result } = renderHook(() => useSocket(), {
         wrapper: ({ children }: { children: React.ReactNode }) => (
           <SocketProvider autoConnect={false}>{children}</SocketProvider>
@@ -84,11 +97,131 @@ describe("SocketProvider & Better Auth SignalR accessTokenFactory", () => {
 
       expect(result.current).toBeDefined();
       expect(result.current.isConnected).toBe(false);
+      expect(result.current.isConnecting).toBe(false);
+      expect(result.current.isReconnecting).toBe(false);
+      expect(result.current.error).toBeNull();
       expect(typeof result.current.connect).toBe("function");
       expect(typeof result.current.disconnect).toBe("function");
       expect(typeof result.current.on).toBe("function");
       expect(typeof result.current.off).toBe("function");
       expect(typeof result.current.invoke).toBe("function");
+      expect(typeof result.current.send).toBe("function");
+    });
+
+    it("does not initiate autoConnect when requireAuth is true and token is empty", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: null,
+        error: { status: 401, message: "Unauthenticated" },
+      });
+
+      const { result } = renderHook(() => useSocket(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <SocketProvider autoConnect={true} requireAuth={true}>
+            {children}
+          </SocketProvider>
+        ),
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.isConnected).toBe(false);
+      expect(result.current.isConnecting).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("clears error state when disconnect() is called", async () => {
+      const { result } = renderHook(() => useSocket(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <SocketProvider autoConnect={false}>{children}</SocketProvider>
+        ),
+      });
+
+      await act(async () => {
+        await result.current.disconnect();
+      });
+
+      expect(result.current.error).toBeNull();
+    });
+
+    it("throws clear error when invoke is called while disconnected", async () => {
+      const { result } = renderHook(() => useSocket(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <SocketProvider autoConnect={false}>{children}</SocketProvider>
+        ),
+      });
+
+      await expect(result.current.invoke("SendMessage", "hello")).rejects.toThrow(
+        "Cannot invoke 'SendMessage' because SignalR is not connected"
+      );
+    });
+
+    it("throws clear error when send is called while disconnected", async () => {
+      const { result } = renderHook(() => useSocket(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <SocketProvider autoConnect={false}>{children}</SocketProvider>
+        ),
+      });
+
+      await expect(result.current.send("SendMessage", "hello")).rejects.toThrow(
+        "Cannot send 'SendMessage' because SignalR is not connected"
+      );
+    });
+
+    it("registers and unregisters event handlers via on() and off()", () => {
+      const { result } = renderHook(() => useSocket(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <SocketProvider autoConnect={false}>{children}</SocketProvider>
+        ),
+      });
+
+      const handler = jest.fn();
+      let unsubscribe: () => void = () => {};
+
+      expect(() => {
+        act(() => {
+          unsubscribe = result.current.on("ReceiveNotification", handler);
+        });
+      }).not.toThrow();
+
+      expect(() => {
+        act(() => {
+          unsubscribe();
+        });
+      }).not.toThrow();
+
+      expect(() => {
+        act(() => {
+          result.current.off("ReceiveNotification", handler);
+          result.current.off("ReceiveNotification");
+        });
+      }).not.toThrow();
+    });
+
+    it("supports injecting authClient directly via provider props", () => {
+      const injectedMockToken = jest.fn<() => Promise<{ data: { token: string } | null; error: unknown }>>().mockResolvedValue({
+        data: { token: "prop-injected-token-555" },
+        error: null,
+      });
+
+      const customAuthClient = {
+        token: injectedMockToken,
+      };
+
+      const { result } = renderHook(() => useSocket(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => (
+          <SocketProvider
+            autoConnect={false}
+            authClient={customAuthClient as never}
+          >
+            {children}
+          </SocketProvider>
+        ),
+      });
+
+      expect(result.current).toBeDefined();
+      expect(result.current.isConnected).toBe(false);
     });
   });
 });

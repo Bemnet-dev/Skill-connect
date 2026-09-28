@@ -30,6 +30,10 @@ describe("Environment Variable Validation (src/env.ts & src/lib/env.ts)", () => 
       expect(() => new URL(rootEnv.BETTER_AUTH_URL)).not.toThrow();
     });
 
+    it("supports optional BETTER_AUTH_TRUSTED_ORIGINS configuration", () => {
+      expect(rootEnv.BETTER_AUTH_TRUSTED_ORIGINS === undefined || typeof rootEnv.BETTER_AUTH_TRUSTED_ORIGINS === "string").toBe(true);
+    });
+
     it("provides AUTH_JWT_ISSUER, AUTH_JWT_AUDIENCE, and AUTH_JWT_EXPIRY", () => {
       expect(rootEnv.AUTH_JWT_ISSUER).toBeDefined();
       expect(typeof rootEnv.AUTH_JWT_ISSUER).toBe("string");

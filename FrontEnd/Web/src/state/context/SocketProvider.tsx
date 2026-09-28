@@ -7,6 +7,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useRef,
   ReactNode,
 } from "react";
 import {
@@ -19,7 +20,8 @@ import { authClient } from "@/lib/auth-client";
 let activeAuthClient = authClient;
 
 /**
- * Allows overriding or mocking the Better Auth client instance for SocketProvider
+ * Allows overriding or mocking the Better Auth client instance for SocketProvider.
+ * Preferred approach is passing authClient directly into <SocketProvider authClient={...} />.
  */
 export function setBetterAuthClient(client: typeof authClient): void {
   activeAuthClient = client;
@@ -29,12 +31,14 @@ export function setBetterAuthClient(client: typeof authClient): void {
  * ─────────────────────────────────────────────────────────────────────────────
  * Better Auth Token Factory for SignalR
  * ─────────────────────────────────────────────────────────────────────────────
- * Pulls the current JWT directly from Better Auth's client instead of authStore.
+ * Pulls the current JWT directly from Better Auth's client.
  * Better Auth manages session refresh and token minting internally.
  */
-export async function getSocketAccessToken(): Promise<string> {
+export async function getSocketAccessToken(
+  client: typeof authClient = activeAuthClient
+): Promise<string> {
   try {
-    const { data, error } = await activeAuthClient.token();
+    const { data, error } = await client.token();
     if (!error && data?.token) {
       return data.token;
     }
@@ -48,6 +52,7 @@ export interface SocketContextType {
   connection: HubConnection | null;
   isConnected: boolean;
   isConnecting: boolean;
+  isReconnecting: boolean;
   connectionState: HubConnectionState;
   error: Error | null;
   connect: () => Promise<void>;
@@ -64,21 +69,40 @@ export interface SocketProviderProps {
   children: ReactNode;
   hubUrl?: string;
   autoConnect?: boolean;
+  /**
+   * When true, autoConnect will verify that an access token exists before
+   * establishing a WebSocket connection. If no token exists, the connection stays
+   * idle in Disconnected state without spamming 401 handshake errors.
+   */
+  requireAuth?: boolean;
   accessTokenFactory?: () => string | Promise<string>;
+  authClient?: typeof authClient;
 }
 
 export function SocketProvider({
   children,
   hubUrl,
   autoConnect = true,
-  accessTokenFactory = getSocketAccessToken,
+  requireAuth = false,
+  accessTokenFactory,
+  authClient: injectedAuthClient,
 }: SocketProviderProps) {
-  // Initialize connection lazily without synchronous setState in effect
-  const [connection] = useState<HubConnection | null>(() => {
+  const isInitialMount = useRef(true);
+
+  // Resolve token factory: prioritize injected auth client if provided
+  const resolvedTokenFactory = useMemo(() => {
+    if (injectedAuthClient) {
+      return () => getSocketAccessToken(injectedAuthClient);
+    }
+    return accessTokenFactory || getSocketAccessToken;
+  }, [injectedAuthClient, accessTokenFactory]);
+
+  // Initialize connection lazily on initial client render
+  const [connection, setConnection] = useState<HubConnection | null>(() => {
     if (typeof window === "undefined") return null;
     return buildSignalRConnection({
       hubUrl,
-      accessTokenFactory,
+      accessTokenFactory: resolvedTokenFactory,
     });
   });
 
@@ -87,20 +111,53 @@ export function SocketProvider({
   );
   const [error, setError] = useState<Error | null>(null);
 
+  // Handle dynamic prop changes after initial mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const newConnection = buildSignalRConnection({
+      hubUrl,
+      accessTokenFactory: resolvedTokenFactory,
+    });
+    setConnection(newConnection);
+    setConnectionState(newConnection.state);
+
+    return () => {
+      newConnection.stop().catch(() => {});
+    };
+  }, [hubUrl, resolvedTokenFactory]);
+
   const isConnected = connectionState === HubConnectionState.Connected;
   const isConnecting =
     connectionState === HubConnectionState.Connecting ||
     connectionState === HubConnectionState.Reconnecting;
+  const isReconnecting = connectionState === HubConnectionState.Reconnecting;
 
   const connect = useCallback(async () => {
     if (!connection) return;
 
+    if (
+      connection.state === HubConnectionState.Connecting ||
+      connection.state === HubConnectionState.Connected
+    ) {
+      return;
+    }
+
+    // Await any pending disconnection transition before starting
+    while (connection.state === HubConnectionState.Disconnecting) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
     if (connection.state === HubConnectionState.Disconnected) {
       setConnectionState(HubConnectionState.Connecting);
+      setError(null);
       try {
         await connection.start();
         setConnectionState(HubConnectionState.Connected);
-        setError(null);
       } catch (err: unknown) {
         setConnectionState(HubConnectionState.Disconnected);
         setError(err instanceof Error ? err : new Error(String(err)));
@@ -109,14 +166,19 @@ export function SocketProvider({
   }, [connection]);
 
   const disconnect = useCallback(async () => {
-    if (connection && connection.state !== HubConnectionState.Disconnected) {
+    if (!connection) return;
+
+    if (connection.state !== HubConnectionState.Disconnected) {
       try {
         await connection.stop();
       } catch {
-        // Ignored during disconnection
+        // Ignored during intentional disconnection
       } finally {
         setConnectionState(HubConnectionState.Disconnected);
+        setError(null);
       }
+    } else {
+      setError(null);
     }
   }, [connection]);
 
@@ -174,54 +236,93 @@ export function SocketProvider({
 
     let isMounted = true;
 
-    connection.onreconnecting((err) => {
+    const handleReconnecting = (err?: Error) => {
       if (!isMounted) return;
       setConnectionState(HubConnectionState.Reconnecting);
       if (err) setError(err);
-    });
+    };
 
-    connection.onreconnected(() => {
+    const handleReconnected = () => {
       if (!isMounted) return;
       setConnectionState(HubConnectionState.Connected);
       setError(null);
-    });
+    };
 
-    connection.onclose((err) => {
+    const handleClose = (err?: Error) => {
       if (!isMounted) return;
       setConnectionState(HubConnectionState.Disconnected);
-      if (err) setError(err);
-    });
+      setError(err ?? null);
+    };
 
-    if (autoConnect && connection.state === HubConnectionState.Disconnected) {
-      Promise.resolve()
-        .then(() => {
+    connection.onreconnecting(handleReconnecting);
+    connection.onreconnected(handleReconnected);
+    connection.onclose(handleClose);
+
+    if (autoConnect) {
+      void (async () => {
+        // If auth is required, verify token availability first
+        if (requireAuth) {
+          try {
+            const token = await resolvedTokenFactory();
+            if (!isMounted) return;
+            if (!token) {
+              setConnectionState(HubConnectionState.Disconnected);
+              return;
+            }
+          } catch {
+            if (!isMounted) return;
+            setConnectionState(HubConnectionState.Disconnected);
+            return;
+          }
+        }
+
+        // Wait if connection is currently in a transitional state (e.g. from React Strict Mode cleanup)
+        while (
+          connection.state === HubConnectionState.Disconnecting ||
+          connection.state === HubConnectionState.Connecting
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
           if (!isMounted) return;
+        }
+
+        if (connection.state === HubConnectionState.Disconnected) {
           setConnectionState(HubConnectionState.Connecting);
-          return connection.start();
-        })
-        .then(() => {
-          if (!isMounted) return;
-          setConnectionState(HubConnectionState.Connected);
           setError(null);
-        })
-        .catch((err: unknown) => {
-          if (!isMounted) return;
-          setConnectionState(HubConnectionState.Disconnected);
-          setError(err instanceof Error ? err : new Error(String(err)));
-        });
+          try {
+            await connection.start();
+            if (!isMounted) {
+              await connection.stop().catch(() => {});
+              return;
+            }
+            setConnectionState(HubConnectionState.Connected);
+          } catch (err: unknown) {
+            if (!isMounted) return;
+            setConnectionState(HubConnectionState.Disconnected);
+            setError(err instanceof Error ? err : new Error(String(err)));
+          }
+        } else if (connection.state === HubConnectionState.Connected) {
+          setConnectionState(HubConnectionState.Connected);
+        }
+      })();
     }
 
     return () => {
       isMounted = false;
-      connection.stop().catch(() => {});
+      if (
+        connection.state === HubConnectionState.Connected ||
+        connection.state === HubConnectionState.Connecting
+      ) {
+        connection.stop().catch(() => {});
+      }
     };
-  }, [connection, autoConnect]);
+  }, [connection, autoConnect, requireAuth, resolvedTokenFactory]);
 
   const value = useMemo<SocketContextType>(
     () => ({
       connection,
       isConnected,
       isConnecting,
+      isReconnecting,
       connectionState,
       error,
       connect,
@@ -235,6 +336,7 @@ export function SocketProvider({
       connection,
       isConnected,
       isConnecting,
+      isReconnecting,
       connectionState,
       error,
       connect,

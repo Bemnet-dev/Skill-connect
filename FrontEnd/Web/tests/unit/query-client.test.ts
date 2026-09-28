@@ -5,6 +5,9 @@ import { describe, it, expect } from "@jest/globals";
 import {
   queryClient,
   createQueryClient,
+  getQueryClient,
+  clearQueryCache,
+  resetBrowserQueryClient,
   shouldRetryQuery,
   NON_RETRYABLE_STATUSES,
   getQueryRetryDelay,
@@ -14,10 +17,11 @@ import { STALE_TIME, API_RETRY } from "@/lib/constants";
 
 describe("queryClient Configuration", () => {
   describe("Default Options", () => {
-    it("sets default queries staleTime to STALE_TIME.DEFAULT (60s)", () => {
+    it("sets default queries staleTime to STALE_TIME.DEFAULT (60s) and gcTime to 24 hours", () => {
       const defaultOptions = queryClient.getDefaultOptions();
       expect(defaultOptions.queries?.staleTime).toBe(STALE_TIME.DEFAULT);
       expect(defaultOptions.queries?.staleTime).toBe(60000);
+      expect(defaultOptions.queries?.gcTime).toBe(24 * 60 * 60 * 1000);
     });
 
     it("disables refetchOnWindowFocus by default", () => {
@@ -32,13 +36,13 @@ describe("queryClient Configuration", () => {
   });
 
   describe("Non-Retryable HTTP Status Handling", () => {
-    const nonRetryableCodes = [400, 401, 403, 404, 422];
+    const nonRetryableCodes = [400, 401, 403, 404, 405, 410, 422];
 
     it("defines the exact set of non-retryable HTTP status codes", () => {
       nonRetryableCodes.forEach((status) => {
         expect(NON_RETRYABLE_STATUSES.has(status)).toBe(true);
       });
-      expect(NON_RETRYABLE_STATUSES.size).toBe(5);
+      expect(NON_RETRYABLE_STATUSES.size).toBe(7);
     });
 
     nonRetryableCodes.forEach((status) => {
@@ -135,6 +139,26 @@ describe("queryClient Configuration", () => {
       expect(client2.getDefaultOptions().queries?.staleTime).toBe(
         STALE_TIME.DEFAULT
       );
+      expect(client1.getDefaultOptions().queries?.gcTime).toBe(
+        24 * 60 * 60 * 1000
+      );
+    });
+  });
+
+  describe("getQueryClient (SSR & Browser Lifecycle)", () => {
+    it("returns a new instance on every call in server environment (typeof window === 'undefined')", () => {
+      // In this node test environment, window is undefined
+      const client1 = getQueryClient();
+      const client2 = getQueryClient();
+
+      expect(client1).toBeDefined();
+      expect(client2).toBeDefined();
+      expect(client1).not.toBe(client2);
+    });
+
+    it("clears query cache safely without throwing errors", () => {
+      expect(() => clearQueryCache()).not.toThrow();
+      expect(() => resetBrowserQueryClient()).not.toThrow();
     });
   });
 });

@@ -10,6 +10,9 @@ import {
   clearAuthTokens,
   setBetterAuthClient,
   setBetterAuthTokenResolver,
+  getRefreshToken,
+  setRefreshToken,
+  getBetterAuthJwt,
 } from "@/lib/api-client";
 
 describe("apiClient (Better Auth Integrated Fetch Pipeline)", () => {
@@ -461,6 +464,218 @@ describe("apiClient (Better Auth Integrated Fetch Pipeline)", () => {
 
       const result = await apiClient.delete("/messages/12");
       expect(result).toBeUndefined();
+    });
+
+    it("handles 200 OK with empty body without throwing JSON SyntaxError", async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response("", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      const result = await apiClient.get("/empty-success");
+      expect(result).toBeUndefined();
+    });
+
+    it("strips explicit Content-Type when body is FormData to allow fetch boundary generation", async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ uploaded: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      const formData = new FormData();
+      formData.append("avatar", "dummy-file-content");
+
+      await apiClient.post("/upload", formData, {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const [, init] = mockFetch.mock.calls[0];
+      const headers = new Headers(init?.headers);
+      // Content-Type must have been stripped so runtime generates multipart boundary
+      expect(headers.has("Content-Type")).toBe(false);
+    });
+  });
+
+  describe("In-Memory Token Security (No LocalStorage Storage)", () => {
+    it("stores JWT strictly in-memory and does not write to localStorage", async () => {
+      const setItemSpy = jest.spyOn(Storage.prototype, "setItem");
+      setAuthToken("secure-in-memory-jwt");
+
+      expect(setItemSpy).not.toHaveBeenCalled();
+      setItemSpy.mockRestore();
+    });
+
+    it("clears in-memory token via clearAuthTokens", async () => {
+      setAuthToken("temporary-token");
+      mockToken.mockResolvedValueOnce({ data: null, error: null });
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      clearAuthTokens();
+      await apiClient.get("/test");
+
+      const [, init] = mockFetch.mock.calls[0];
+      const headers = new Headers(init?.headers);
+      expect(headers.has("Authorization")).toBe(false);
+    });
+  });
+
+  describe("AbortSignal & Cancellation Hygiene", () => {
+    it("aborts immediately without dispatching fetch when signal is pre-aborted", async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        apiClient.get("/cancelled", { signal: controller.signal })
+      ).rejects.toMatchObject({
+        status: 499,
+        statusText: "Client Closed Request",
+        message: "Request was cancelled",
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("distinguishes user cancellation from request timeout", async () => {
+      const controller = new AbortController();
+
+      mockFetch.mockImplementation(
+        () =>
+          new Promise((_, reject) => {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            reject(err);
+          })
+      );
+
+      controller.abort();
+
+      await expect(
+        apiClient.get("/user-cancelled", { signal: controller.signal })
+      ).rejects.toMatchObject({
+        status: 499,
+        statusText: "Client Closed Request",
+      });
+    });
+
+    it("supports skipTokenReacquisition as modern alias for skipAuthRefresh", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "token-1" },
+        error: null,
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      await expect(
+        apiClient.get("/strict-endpoint-2", { skipTokenReacquisition: true })
+      ).rejects.toThrow(ApiError);
+
+      expect(mockToken).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT attempt token re-acquisition on 403 Forbidden (authorization failure)", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "valid-customer-jwt" },
+        error: null,
+      });
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            title: "Forbidden",
+            status: 403,
+            detail: "Worker role required for this action.",
+          }),
+          {
+            status: 403,
+            statusText: "Forbidden",
+            headers: { "Content-Type": "application/json" },
+          }
+        )
+      );
+
+      try {
+        await apiClient.post("/workers/payouts", { amount: 100 });
+        throw new Error("Should have thrown 403 ApiError");
+      } catch (err: unknown) {
+        expect(isApiError(err)).toBe(true);
+        if (isApiError(err)) {
+          expect(err.status).toBe(403);
+          expect(err.statusText).toBe("Forbidden");
+          expect(err.message).toBe("Worker role required for this action.");
+        }
+      }
+
+      // Crucial: Better Auth token was queried only once before request, NEVER re-acquired on 403
+      expect(mockToken).toHaveBeenCalledTimes(1);
+      // Backend was called only once (not retried)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Legacy Compatibility Stubs", () => {
+    it("provides safe no-op stubs for getRefreshToken and setRefreshToken", () => {
+      expect(getRefreshToken()).toBeNull();
+      expect(() => setRefreshToken("dummy")).not.toThrow();
+      expect(getRefreshToken()).toBeNull();
+    });
+  });
+
+  describe("Client-Side In-Memory Caching & forceRefresh", () => {
+    it("reuses in-memory token on subsequent requests without querying Better Auth again", async () => {
+      mockToken.mockResolvedValueOnce({
+        data: { token: "first-call-jwt" },
+        error: null,
+      });
+
+      mockFetch.mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+      );
+
+      // Request 1: fetches from Better Auth and caches
+      await apiClient.get("/req-1");
+      expect(mockToken).toHaveBeenCalledTimes(1);
+
+      // Request 2: uses cached in-memory token, Better Auth is NOT called again
+      await apiClient.get("/req-2");
+      expect(mockToken).toHaveBeenCalledTimes(1);
+
+      const [, init2] = mockFetch.mock.calls[1];
+      const headers2 = new Headers(init2?.headers);
+      expect(headers2.get("Authorization")).toBe("Bearer first-call-jwt");
+    });
+
+    it("bypasses in-memory cache and re-queries Better Auth when forceRefresh is true", async () => {
+      setAuthToken("cached-jwt");
+
+      mockToken.mockResolvedValueOnce({
+        data: { token: "forced-fresh-jwt" },
+        error: null,
+      });
+
+      const token = await getBetterAuthJwt({ forceRefresh: true });
+
+      expect(token).toBe("forced-fresh-jwt");
+      expect(mockToken).toHaveBeenCalledTimes(1);
     });
   });
 });

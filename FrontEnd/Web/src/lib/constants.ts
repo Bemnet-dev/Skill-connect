@@ -51,6 +51,11 @@ export const ROUTES = {
   /** Root/home page */
   HOME: '/',
   
+  /** Common account, settings and onboarding routes */
+  PROFILE: '/profile',
+  SETTINGS: '/settings',
+  ONBOARDING: '/onboarding',
+
   /** Authentication routes */
   AUTH: {
     /** Login page */
@@ -102,7 +107,7 @@ export const ROUTES = {
  * @returns Route path to the worker's profile page
  */
 export const getWorkerProfileRoute = (workerId: string): string => 
-  `${ROUTES.CUSTOMER.WORKERS}/${workerId}`;
+  `${ROUTES.CUSTOMER.WORKERS}/${encodeURIComponent(workerId.trim())}`;
 
 /**
  * Generate route path for a specific booking
@@ -110,7 +115,7 @@ export const getWorkerProfileRoute = (workerId: string): string =>
  * @returns Route path to the booking detail page
  */
 export const getBookingDetailRoute = (bookingId: string): string => 
-  `${ROUTES.CUSTOMER.BOOKINGS}/${bookingId}`;
+  `${ROUTES.CUSTOMER.BOOKINGS}/${encodeURIComponent(bookingId.trim())}`;
 
 /**
  * Generate route path for a specific chat thread
@@ -118,7 +123,7 @@ export const getBookingDetailRoute = (bookingId: string): string =>
  * @returns Route path to the chat conversation
  */
 export const getChatThreadRoute = (threadId: string): string => 
-  `${ROUTES.CUSTOMER.CHAT}/${threadId}`;
+  `${ROUTES.CUSTOMER.CHAT}/${encodeURIComponent(threadId.trim())}`;
 
 /**
  * Generate route path for a specific job
@@ -126,7 +131,7 @@ export const getChatThreadRoute = (threadId: string): string =>
  * @returns Route path to the job detail page
  */
 export const getJobDetailRoute = (jobId: string): string => 
-  `${ROUTES.WORKER.JOBS}/${jobId}`;
+  `${ROUTES.WORKER.JOBS}/${encodeURIComponent(jobId.trim())}`;
 
 /**
  * Validation Constraints
@@ -148,6 +153,15 @@ export const VALIDATION = {
     MIN_LENGTH: 3,
     /** Maximum username length for display compatibility */
     MAX_LENGTH: 30,
+  },
+  /** One-time password (OTP) verification constraints */
+  OTP: {
+    /** Exact length of OTP code (6 digits) */
+    LENGTH: 6,
+    /** Expiration duration in seconds (5 minutes) */
+    EXPIRES_IN_SECONDS: 300,
+    /** Maximum retry attempts before temporary lockout */
+    MAX_ATTEMPTS: 3,
   },
   /** Maximum length for user bio text (worker profiles, etc.) */
   BIO_MAX_LENGTH: 500,
@@ -210,6 +224,9 @@ export const FILE_UPLOAD = {
     INVALID_TYPE: 'Invalid file type. Please upload a valid image or document.',
   },
 } as const;
+
+export type AllowedImageType = (typeof FILE_UPLOAD.ALLOWED_IMAGE_TYPES)[number];
+export type AllowedDocumentType = (typeof FILE_UPLOAD.ALLOWED_DOCUMENT_TYPES)[number];
 
 /**
  * SignalR Connection Configuration
@@ -344,6 +361,49 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 export const BOOKING_STATUSES_LIST = Object.values(BOOKING_STATUSES);
 
 /**
+ * User Authorization Roles
+ * 
+ * Centralized authorization roles across the application:
+ * - customer: books workers, reviews services, messages workers
+ * - worker: manages profile, accepts bookings, logs earnings
+ * - admin: verifies workers, handles disputes, audits platform
+ */
+export const USER_ROLES = {
+  CUSTOMER: 'customer',
+  WORKER: 'worker',
+  ADMIN: 'admin',
+} as const;
+
+export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
+
+export const USER_ROLES_LIST = Object.values(USER_ROLES);
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  [USER_ROLES.CUSTOMER]: 'Customer',
+  [USER_ROLES.WORKER]: 'Service Worker',
+  [USER_ROLES.ADMIN]: 'Administrator',
+} as const;
+
+/**
+ * Supported Currencies and Symbols
+ */
+export const CURRENCIES = {
+  USD: 'USD',
+  ETB: 'ETB',
+} as const;
+
+export type Currency = (typeof CURRENCIES)[keyof typeof CURRENCIES];
+
+export const CURRENCIES_LIST = Object.values(CURRENCIES);
+
+export const DEFAULT_CURRENCY: Currency = CURRENCIES.USD;
+
+export const CURRENCY_SYMBOLS: Record<Currency, string> = {
+  [CURRENCIES.USD]: '$',
+  [CURRENCIES.ETB]: 'ETB ',
+} as const;
+
+/**
  * React Query Stale Times (in milliseconds)
  * 
  * Standardized caching durations used across TanStack Query hooks so developers
@@ -364,6 +424,26 @@ export const STALE_TIME = {
   VERY_LONG: 60 * 60 * 1000,
   /** Infinite stale time for immutable reference data */
   INFINITY: Infinity,
+} as const;
+
+/**
+ * React Query Garbage Collection Times (in milliseconds)
+ * 
+ * Standardized inactive query cache lifetimes.
+ * In TanStack Query, gcTime must always be >= corresponding STALE_TIME to
+ * prevent premature cache eviction of fresh data.
+ */
+export const GC_TIME = {
+  /** Short-lived live data: 5 minutes */
+  SHORT: 5 * 60 * 1000,
+  /** Standard default garbage collection window: 15 minutes */
+  DEFAULT: 15 * 60 * 1000,
+  /** Medium duration for search & listings: 1 hour */
+  MEDIUM: 60 * 60 * 1000,
+  /** Long duration for profiles: 24 hours */
+  LONG: 24 * 60 * 60 * 1000,
+  /** Maximum retention window: 24 hours */
+  MAX: 24 * 60 * 60 * 1000,
 } as const;
 
 /**

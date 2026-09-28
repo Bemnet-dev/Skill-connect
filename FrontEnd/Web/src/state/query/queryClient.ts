@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { isApiError } from "@/lib/api-client";
-import { STALE_TIME, API_RETRY } from "@/lib/constants";
+import { STALE_TIME, GC_TIME, API_RETRY } from "@/lib/constants";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -14,6 +14,8 @@ export const NON_RETRYABLE_STATUSES = new Set<number>([
   401, // Unauthorized (handled via silent refresh in api-client; if bubbling up, do not loop)
   403, // Forbidden (insufficient permissions)
   404, // Not Found (resource does not exist)
+  405, // Method Not Allowed (unsupported HTTP verb)
+  410, // Gone (permanently removed)
   422, // Unprocessable Entity (business validation failure)
 ]);
 
@@ -21,7 +23,7 @@ export const NON_RETRYABLE_STATUSES = new Set<number>([
  * Global Query Retry Strategy
  *
  * Determines whether a failed query should be retried.
- * Treats ApiError with statuses 400, 401, 403, 404, and 422 as non-retryable.
+ * Treats ApiError with statuses 400, 401, 403, 404, 405, 410, and 422 as non-retryable.
  * Retries network errors, 408 timeouts, and 5xx server errors up to MAX_ATTEMPTS.
  *
  * @param failureCount - Number of times the query has failed so far
@@ -69,6 +71,7 @@ export function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         staleTime: STALE_TIME.DEFAULT,
+        gcTime: GC_TIME.MAX, // 24 hours (prevents premature cache eviction on long stale queries)
         refetchOnWindowFocus: false,
         retry: shouldRetryQuery,
         retryDelay: getQueryRetryDelay,
@@ -81,9 +84,44 @@ export function createQueryClient(): QueryClient {
   });
 }
 
+let browserQueryClient: QueryClient | undefined = undefined;
+
 /**
- * Global shared QueryClient singleton used by Providers and hooks.
+ * Returns the appropriate QueryClient instance per official Next.js App Router guidelines:
+ * - On the server (SSR): creates a new QueryClient per request to avoid cross-request data leaks.
+ * - In the browser: lazily creates and reuses a single client instance for the browser session.
  */
-export const queryClient = createQueryClient();
+export function getQueryClient(): QueryClient {
+  if (typeof window === "undefined") {
+    return createQueryClient();
+  }
+  if (!browserQueryClient) {
+    browserQueryClient = createQueryClient();
+  }
+  return browserQueryClient;
+}
+
+/**
+ * Clears all queries from the active browser query client cache.
+ * Useful on user sign-out or session switch.
+ */
+export function clearQueryCache(): void {
+  if (browserQueryClient) {
+    browserQueryClient.clear();
+  }
+}
+
+/**
+ * Resets the browser query client singleton (primarily for test environments).
+ */
+export function resetBrowserQueryClient(): void {
+  browserQueryClient = undefined;
+}
+
+/**
+ * Global QueryClient instance for backward compatibility.
+ * In React components, prefer `const [queryClient] = useState(() => getQueryClient())`.
+ */
+export const queryClient = getQueryClient();
 
 export default queryClient;
