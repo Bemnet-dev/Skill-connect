@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SkillConnect.Api/SkillConnect.Api.csproj" />
+  <Project Path="SkillConnect.Core/SkillConnect.Core.csproj" />
+  <Project Path="SkillConnect.Infrastructure/SkillConnect.Infrastructure.csproj" />
+</Solution>

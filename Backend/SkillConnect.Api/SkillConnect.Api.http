@@ -1,0 +1,6 @@
+@SkillConnect.Api_HostAddress = http://localhost:5077
+
+GET {{SkillConnect.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
