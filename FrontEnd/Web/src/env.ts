@@ -62,6 +62,20 @@ export const env = createEnv({
       .string()
       .min(1, "INTERNAL_REVALIDATE_SECRET must not be empty")
       .default("development-internal-revalidation-secret"),
+
+    // Neon Postgres connection string (used by Better Auth adapter)
+    DATABASE_URL: z
+      .string()
+      .min(1, "DATABASE_URL must not be empty")
+      .url("DATABASE_URL must be a valid connection URL"),
+
+    // Telegram OTP dispatcher
+    TELEGRAM_BOT_TOKEN: z
+      .string()
+      .min(1, "TELEGRAM_BOT_TOKEN is required"),
+    TELEGRAM_CHAT_ID: z
+      .string()
+      .min(1, "TELEGRAM_CHAT_ID is required"),
   },
 
   /**
@@ -98,6 +112,9 @@ export const env = createEnv({
     NEXT_PUBLIC_SIGNALR_HUB_URL: process.env.NEXT_PUBLIC_SIGNALR_HUB_URL,
     NEXT_PUBLIC_MAPS_PROVIDER_KEY: process.env.NEXT_PUBLIC_MAPS_PROVIDER_KEY,
     NEXT_PUBLIC_DEFAULT_LOCALE: process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
+    DATABASE_URL: process.env.DATABASE_URL,
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
   },
 
   /**

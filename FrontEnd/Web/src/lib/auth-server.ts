@@ -1,31 +1,30 @@
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
 import { phoneNumber } from "better-auth/plugins/phone-number";
-import { memoryAdapter } from "better-auth/adapters/memory";
+import { Pool } from "pg";
 import { env } from "@/env";
 
 /**
- * ─────────────────────────────────────────────────────────────────────────────
- * Better Auth Server Configuration
- * ─────────────────────────────────────────────────────────────────────────────
- * Defines server-side authentication behavior for Skilld:
- * 
- * 1. Database Adapter:
- *    Uses Better Auth's memory adapter by default for in-memory development,
- *    testing, and lightweight deployments. Can be substituted with Postgres/
- *    Prisma/Drizzle adapters as persistent infrastructure is provisioned.
- *
- * 2. Phone Number Plugin:
- *    Enables passwordless phone + OTP sign-in, auto-provisioning temporary user
- *    accounts upon first successful phone verification, with a 6-digit OTP
- *    and a 5-minute (300s) expiry window.
- *
- * 3. JWT Plugin:
- *    Signs and issues short-lived JWTs (15-minute expiry) bearing the user's
- *    id, role, phone, and session context to authenticate frontend requests
- *    against the downstream C# backend API.
- * ─────────────────────────────────────────────────────────────────────────────
+ * Sends a message to a Telegram chat via the Bot API.
+ * Used as the OTP dispatcher — no extra packages needed, plain fetch.
  */
+async function sendTelegramMessage(text: string): Promise<void> {
+  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: env.TELEGRAM_CHAT_ID,
+      text,
+      parse_mode: "HTML",
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Telegram sendMessage failed (${res.status}): ${body}`);
+  }
+}
 
 export const AUTH_CONFIG = {
   jwt: {
@@ -38,12 +37,6 @@ export const AUTH_CONFIG = {
     expiresIn: 300, // 5 minutes
   },
 } as const;
-
-/**
- * In-memory database store used by the default memory adapter.
- * Useful for development, unit testing, and clearing between test runs.
- */
-export const memoryStore: Record<string, unknown[]> = {};
 
 /**
  * Type definition for custom OTP dispatchers (e.g. Twilio, Infobip, mock).
@@ -165,7 +158,7 @@ export const auth = betterAuth({
       },
     },
   },
-  database: memoryAdapter(memoryStore),
+  database: new Pool({ connectionString: env.DATABASE_URL }),
   session: {
     cookieCache: {
       enabled: true,
@@ -192,15 +185,13 @@ export const auth = betterAuth({
           return;
         }
 
-        if (process.env.NODE_ENV !== "production") {
-          console.info(
-            `[Better Auth OTP] Destination: ${phoneNumber} | Verification Code: ${code}`
-          );
-          return;
-        }
-
-        throw new Error(
-          `[Better Auth OTP] Failed to send OTP: No SMS dispatcher configured in production environment (destination: ${phoneNumber}).`
+        // Send OTP via Telegram bot (dev + production)
+        await sendTelegramMessage(
+          `🔐 <b>SkillConnect verification code</b>\n\n` +
+          `Your code: <b>${code}</b>\n\n` +
+          `📱 Phone: ${phoneNumber}\n` +
+          `⏱ Expires in 5 minutes.\n\n` +
+          `<i>If you didn't request this, ignore this message.</i>`
         );
       },
       signUpOnVerification: {
