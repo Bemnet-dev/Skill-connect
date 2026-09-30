@@ -3,6 +3,9 @@ process.env.NEXT_PUBLIC_SIGNALR_HUB_URL = process.env.NEXT_PUBLIC_SIGNALR_HUB_UR
 process.env.NEXT_PUBLIC_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
 process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET || 'development-secret-skill-connect-auth-token-32-chars-minimum';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/testdb';
+process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '123456:test-telegram-token';
+process.env.TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '123456789';
 
 import nextJest from "next/jest.js";
 const createJestConfig = nextJest({ dir: "./" });

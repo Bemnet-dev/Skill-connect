@@ -1,4 +1,15 @@
-// Type definitions for booking feature
-// TODO: Add actual types in future phases
+export type {
+  BookingStatus,
+  CreateBookingInput,
+  UpdateBookingStatusInput,
+  Booking,
+} from "./schema";
 
-export {};
+export interface BookingFilters {
+  status?: string;
+  role?: "customer" | "worker";
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
+}

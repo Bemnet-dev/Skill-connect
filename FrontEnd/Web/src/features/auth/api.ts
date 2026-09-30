@@ -48,8 +48,8 @@ export async function requestOtp(
 
   return {
     success: true,
-    message: "Verification code sent to Telegram",
     ...(data || {}),
+    message: data?.message || "Verification code sent to Telegram",
   };
 }
 

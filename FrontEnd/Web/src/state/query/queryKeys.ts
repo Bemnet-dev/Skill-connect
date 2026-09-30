@@ -122,10 +122,26 @@ export const queryKeys = {
     byBooking: (bookingId: string) =>
       [...queryKeys.quotations.all, "booking", bookingId] as const,
     details: () => [...queryKeys.quotations.all, "detail"] as const,
-    detail: (quoteId: string) =>
-      [...queryKeys.quotations.details(), quoteId] as const,
+    detail: (quoteId: string | number) =>
+      [...queryKeys.quotations.details(), String(quoteId)] as const,
     workerPendingQuotes: (workerId: string) =>
       [...queryKeys.quotations.all, "worker", workerId, "pending"] as const,
+    byJobRequest: (jobRequestId: string | number) =>
+      [...queryKeys.quotations.all, "job-request", String(jobRequestId)] as const,
+    my: () => [...queryKeys.quotations.all, "my"] as const,
+  },
+
+  /**
+   * 5b. Job Requests
+   */
+  jobRequests: {
+    all: ["jobRequests"] as const,
+    lists: () => [...queryKeys.jobRequests.all, "list"] as const,
+    my: () => [...queryKeys.jobRequests.all, "my"] as const,
+    open: () => [...queryKeys.jobRequests.all, "open"] as const,
+    details: () => [...queryKeys.jobRequests.all, "detail"] as const,
+    detail: (id: string | number) =>
+      [...queryKeys.jobRequests.details(), String(id)] as const,
   },
 
   /**

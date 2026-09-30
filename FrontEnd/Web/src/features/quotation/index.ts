@@ -1,5 +1,5 @@
 /**
- * Booking Feature Module Public API
+ * Quotation Feature Module Public API
  */
 
 export * from "./schema";

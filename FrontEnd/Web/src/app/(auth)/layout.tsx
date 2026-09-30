@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ToastContainer } from "@/components/feedback/Toast";
 
 /**
@@ -29,7 +30,9 @@ export default function AuthLayout({
 
       {/* Centered content area */}
       <main className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-[420px]">{children}</div>
+        <div className="w-full max-w-[420px]">
+          <Suspense fallback={null}>{children}</Suspense>
+        </div>
       </main>
 
       {/* Footer note */}
