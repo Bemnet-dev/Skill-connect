@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SkillConnect.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0c94248b8ac59c6563b6e73013a7348d895f8a1c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8c58fbb3bae3b2a538b09385b80b53277d4654df")]
 [assembly: System.Reflection.AssemblyProductAttribute("SkillConnect.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SkillConnect.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

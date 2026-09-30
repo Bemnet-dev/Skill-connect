@@ -187,3 +187,6 @@ D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\refint\SkillConne
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.pdb
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.genruntimeconfig.cache
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\ref\SkillConnect.Api.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.MvcApplicationPartsAssemblyInfo.cs
+D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.AspNetCore.OpenApi.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.OpenApi.dll

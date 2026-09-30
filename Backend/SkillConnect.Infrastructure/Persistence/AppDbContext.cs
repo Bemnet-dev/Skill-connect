@@ -28,6 +28,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
+        // Exclude the Better Auth `user` table from migrations — Better Auth owns it
+        modelBuilder.Entity<AppUser>().ToTable("user", t => t.ExcludeFromMigrations());
+
         // Apply all IEntityTypeConfiguration<T> classes in this assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
