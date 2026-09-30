@@ -54,6 +54,7 @@ D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\SkillConnect.Api.
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\SkillConnect.Api.pdb
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Humanizer.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.AspNetCore.OpenApi.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.Build.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.Build.Framework.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.Build.Tasks.Core.dll
@@ -76,6 +77,7 @@ D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.Identit
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Tokens.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.NET.StringTools.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.OpenApi.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Mono.TextTemplating.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Newtonsoft.Json.dll
 D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Npgsql.dll
@@ -170,6 +172,7 @@ D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.AssemblyInfoInputs.cache
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.AssemblyInfo.cs
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.csproj.CoreCompileInputs.cache
+D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.MvcApplicationPartsAssemblyInfo.cs
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.MvcApplicationPartsAssemblyInfo.cache
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.sourcelink.json
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\rjimswa.dswa.cache.json
@@ -187,6 +190,3 @@ D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\refint\SkillConne
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.pdb
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.genruntimeconfig.cache
 D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\ref\SkillConnect.Api.dll
-D:\VS\Skill-connect\Backend\SkillConnect.Api\obj\Debug\net10.0\SkillConnect.Api.MvcApplicationPartsAssemblyInfo.cs
-D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.AspNetCore.OpenApi.dll
-D:\VS\Skill-connect\Backend\SkillConnect.Api\bin\Debug\net10.0\Microsoft.OpenApi.dll

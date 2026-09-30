@@ -1,0 +1,12 @@
+D:\VS\Skill-connect\Backend\SkillConnect.Core\bin\Release\net10.0\SkillConnect.Core.deps.json
+D:\VS\Skill-connect\Backend\SkillConnect.Core\bin\Release\net10.0\SkillConnect.Core.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Core\bin\Release\net10.0\SkillConnect.Core.pdb
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.GeneratedMSBuildEditorConfig.editorconfig
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.AssemblyInfoInputs.cache
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.AssemblyInfo.cs
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.csproj.CoreCompileInputs.cache
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.sourcelink.json
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\refint\SkillConnect.Core.dll
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\SkillConnect.Core.pdb
+D:\VS\Skill-connect\Backend\SkillConnect.Core\obj\Release\net10.0\ref\SkillConnect.Core.dll

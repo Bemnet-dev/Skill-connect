@@ -8,13 +8,13 @@
 
 ## Authentication
 
-All endpoints except `/api/auth/health` and `/api/workers/search` require a valid JWT token.
+All endpoints except `/api/auth/health` and `/api/workers/search`, `/api/workers/{id}`, `/api/categories`, `/api/reviews/worker/{workerProfileId}` require a valid JWT token.
 
 ```
 Authorization: Bearer <your-jwt-token>
 ```
 
-The JWT is obtained from the Next.js frontend via Better Auth's token endpoint.
+The JWT is obtained from the Next.js frontend via Better Auth's token endpoint (`/api/auth/token`).
 
 ---
 
@@ -67,7 +67,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/api/workers/search` | None | Search workers with filters |
-| GET | `/api/workers/{id}` | None | Get worker profile by ID |
+| GET | `/api/workers/{id:int}` | None | Get worker profile by ID |
 | GET | `/api/workers/me` | Required | Get current user's worker profile |
 
 #### GET /api/workers/search
@@ -127,7 +127,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 }
 ```
 
-#### GET /api/workers/{id}
+#### GET /api/workers/{id:int}
 **Response:** Single `WorkerDetailResponse` object (includes `recentReviews` array).
 
 #### GET /api/workers/me
@@ -161,10 +161,10 @@ Both hubs require JWT authentication via `access_token` query parameter.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/jobrequests` | Required | Create a job request |
-| GET | `/api/jobrequests/{id}` | Required | Get job request by ID |
+| GET | `/api/jobrequests/{id:int}` | Required | Get job request by ID |
 | GET | `/api/jobrequests/my` | Required | Get current user's job requests |
 | GET | `/api/jobrequests/open` | Required | Get all open job requests |
-| PATCH | `/api/jobrequests/{id}/status` | Required | Update job request status |
+| PATCH | `/api/jobrequests/{id:int}/status` | Required | Update job request status |
 
 #### POST /api/jobrequests
 **Request Body:**
@@ -180,7 +180,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 
 **Response:** `JobRequestResponse` object.
 
-#### PATCH /api/jobrequests/{id}/status
+#### PATCH /api/jobrequests/{id:int}/status
 **Request Body:**
 ```json
 {
@@ -196,11 +196,11 @@ Both hubs require JWT authentication via `access_token` query parameter.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/quotes` | Required | Submit a quote |
-| GET | `/api/quotes/{id}` | Required | Get quote by ID |
-| GET | `/api/quotes/my` | Required | Get current worker's quotes |
-| GET | `/api/quotes/job-request/{jobRequestId}` | Required | Get quotes for a job request |
-| PATCH | `/api/quotes/{id}/status` | Required | Update quote status |
+| POST | `/api/quotes` | Required (Worker) | Submit a quote |
+| GET | `/api/quotes/{id:int}` | Required | Get quote by ID |
+| GET | `/api/quotes/my` | Required (Worker) | Get current worker's quotes |
+| GET | `/api/quotes/job-request/{jobRequestId:int}` | Required | Get quotes for a job request |
+| PATCH | `/api/quotes/{id:int}/status` | Required | Update quote status |
 
 #### POST /api/quotes
 **Request Body:**
@@ -213,7 +213,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 }
 ```
 
-#### PATCH /api/quotes/{id}/status
+#### PATCH /api/quotes/{id:int}/status
 **Request Body:**
 ```json
 {
@@ -230,10 +230,10 @@ Both hubs require JWT authentication via `access_token` query parameter.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/bookings` | Required | Create booking from quote |
-| GET | `/api/bookings/{id}` | Required | Get booking by ID |
+| GET | `/api/bookings/{id:int}` | Required | Get booking by ID |
 | GET | `/api/bookings/my` | Required | Get current user's bookings |
-| GET | `/api/bookings/worker/{workerProfileId}` | Required | Get bookings for a worker |
-| PATCH | `/api/bookings/{id}/status` | Required | Update booking status |
+| GET | `/api/bookings/worker/{workerProfileId:int}` | Required | Get bookings for a worker |
+| PATCH | `/api/bookings/{id:int}/status` | Required | Update booking status |
 
 #### POST /api/bookings
 **Request Body:**
@@ -243,7 +243,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 }
 ```
 
-#### PATCH /api/bookings/{id}/status
+#### PATCH /api/bookings/{id:int}/status
 **Request Body:**
 ```json
 {
@@ -260,8 +260,8 @@ Both hubs require JWT authentication via `access_token` query parameter.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/reviews` | Required | Submit a review |
-| GET | `/api/reviews/worker/{workerProfileId}` | None | Get reviews for a worker |
-| GET | `/api/reviews/booking/{bookingId}` | Required | Get reviews for a booking |
+| GET | `/api/reviews/worker/{workerProfileId:int}` | None | Get reviews for a worker |
+| GET | `/api/reviews/booking/{bookingId:int}` | Required | Get reviews for a booking |
 
 #### POST /api/reviews
 **Request Body:**
@@ -281,9 +281,9 @@ Both hubs require JWT authentication via `access_token` query parameter.
 |--------|----------|------|-------------|
 | POST | `/api/chat/threads` | Required | Create chat thread |
 | GET | `/api/chat/threads` | Required | Get user's chat threads |
-| GET | `/api/chat/threads/{threadId}` | Required | Get specific thread |
+| GET | `/api/chat/threads/{threadId:int}` | Required | Get specific thread |
 | POST | `/api/chat/messages` | Required | Send a message |
-| GET | `/api/chat/threads/{threadId}/messages` | Required | Get thread messages |
+| GET | `/api/chat/threads/{threadId:int}/messages` | Required | Get thread messages |
 
 #### POST /api/chat/threads
 **Request Body:**
@@ -328,10 +328,10 @@ Both hubs require JWT authentication via `access_token` query parameter.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/verification` | Required | Submit verification document |
-| GET | `/api/verification/worker/{workerProfileId}` | Required | Get worker's submissions |
+| POST | `/api/verification` | Required (Worker) | Submit verification document |
+| GET | `/api/verification/worker/{workerProfileId:int}` | Required | Get worker's submissions |
 | GET | `/api/verification/pending` | Admin | Get pending submissions |
-| PATCH | `/api/verification/{id}/review` | Admin | Review submission |
+| PATCH | `/api/verification/{id:int}/review` | Admin | Review submission |
 
 #### POST /api/verification
 **Request Body:**
@@ -342,7 +342,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 }
 ```
 
-#### PATCH /api/verification/{id}/review
+#### PATCH /api/verification/{id:int}/review
 **Request Body:**
 ```json
 {
@@ -358,10 +358,10 @@ Both hubs require JWT authentication via `access_token` query parameter.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/disputes` | Required | Raise a dispute |
-| GET | `/api/disputes/{id}` | Required | Get dispute by ID |
+| GET | `/api/disputes/{id:int}` | Required | Get dispute by ID |
 | GET | `/api/disputes/my` | Required | Get user's disputes |
 | GET | `/api/disputes/open` | Admin | Get open disputes |
-| PATCH | `/api/disputes/{id}/resolve` | Admin | Resolve dispute |
+| PATCH | `/api/disputes/{id:int}/resolve` | Admin | Resolve dispute |
 
 #### POST /api/disputes
 **Request Body:**
@@ -372,7 +372,7 @@ Both hubs require JWT authentication via `access_token` query parameter.
 }
 ```
 
-#### PATCH /api/disputes/{id}/resolve
+#### PATCH /api/disputes/{id:int}/resolve
 **Request Body:**
 ```json
 {
@@ -387,10 +387,10 @@ Both hubs require JWT authentication via `access_token` query parameter.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/payments` | Required | Create payment record |
-| GET | `/api/payments/{id}` | Required | Get payment by ID |
-| GET | `/api/payments/booking/{bookingId}` | Required | Get booking payments |
-| GET | `/api/payments/worker/{workerProfileId}` | Required | Get worker payments |
-| PATCH | `/api/payments/{id}/status` | Required | Update payment status |
+| GET | `/api/payments/{id:int}` | Required | Get payment by ID |
+| GET | `/api/payments/booking/{bookingId:int}` | Required | Get booking payments |
+| GET | `/api/payments/worker/{workerProfileId:int}` | Required | Get worker payments |
+| PATCH | `/api/payments/{id:int}/status` | Required | Update payment status |
 
 #### POST /api/payments
 **Request Body:**
@@ -446,3 +446,26 @@ dotnet run
 ```
 
 The API will be available at `http://localhost:5077`.
+
+---
+
+## Project Structure
+
+```
+Backend/
+├── SkillConnect.Api/           # ASP.NET Core Web API
+│   ├── Controllers/            # API Controllers
+│   ├── DTOs/                   # Data Transfer Objects
+│   ├── Hubs/                   # SignalR Hubs
+│   ├── Services/               # Business Logic Services
+│   ├── Extensions/             # DI Extensions
+│   ├── Middleware/             # Custom Middleware
+│   └── Properties/             # Launch Settings
+├── SkillConnect.Core/          # Domain Entities & Enums
+│   ├── Entities/               # Domain Models
+│   └── Enums/                  # Domain Enums
+├── SkillConnect.Infrastructure/# Data Access Layer
+│   ├── Persistence/            # EF Core DbContext & Configurations
+│   └── Migrations/             # Database Migrations
+└── API_DOCUMENTATION.md        # This file
+```

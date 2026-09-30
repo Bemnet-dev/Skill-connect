@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using SkillConnect.Api.Hubs;
 using SkillConnect.Api.Services;
 using SkillConnect.Infrastructure.Persistence;
+using System.Text;
 
 namespace SkillConnect.Api.Extensions;
 
@@ -55,13 +56,18 @@ public static class ServiceExtensions
         var betterAuthUrl = configuration["BetterAuth:BaseUrl"] ?? "http://localhost:3000";
         var issuer = configuration["BetterAuth:Issuer"] ?? "skill-connect";
         var audience = configuration["BetterAuth:Audience"] ?? "skill-connect-api";
+        var secret = configuration["BetterAuth:Secret"] ?? configuration["BetterAuth:JwtSecret"] ?? throw new InvalidOperationException("BetterAuth:Secret or BetterAuth:JwtSecret must be configured");
+
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                options.Authority = betterAuthUrl;
+                // Don't use Authority/JWKS - we validate with shared symmetric key (HS256)
+                options.Authority = null;
                 options.Audience = audience;
-                options.RequireHttpsMetadata = false; // Set to true in production
+                options.RequireHttpsMetadata = false;
+                options.Configuration = null; // Disable auto-config from metadata endpoint
 
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -71,10 +77,11 @@ public static class ServiceExtensions
                     ValidAudience = audience,
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(5),
-                    ValidateIssuerSigningKey = true
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = signingKey
                 };
 
-                // SignalR auth
+                // SignalR auth - read token from query string for WebSocket connections
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
