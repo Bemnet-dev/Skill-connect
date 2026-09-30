@@ -1,30 +1,14 @@
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
 import { phoneNumber } from "better-auth/plugins/phone-number";
+import { admin } from "better-auth/plugins/admin";
 import { Pool } from "pg";
 import { env } from "@/env";
 
 /**
- * Sends a message to a Telegram chat via the Bot API.
- * Used as the OTP dispatcher — no extra packages needed, plain fetch.
+ * In-memory database store used for testing and mock adapter support.
  */
-async function sendTelegramMessage(text: string): Promise<void> {
-  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: env.TELEGRAM_CHAT_ID,
-      text,
-      parse_mode: "HTML",
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Telegram sendMessage failed (${res.status}): ${body}`);
-  }
-}
+export const memoryStore: Record<string, unknown[]> = {};
 
 export const AUTH_CONFIG = {
   jwt: {
@@ -40,6 +24,7 @@ export const AUTH_CONFIG = {
 
 /**
  * Type definition for custom OTP dispatchers (e.g. Twilio, Infobip, mock).
+ * Set via setSmsDispatcher() at runtime.
  */
 export type SmsDispatcher = (data: {
   phoneNumber: string;
@@ -176,6 +161,9 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    admin({
+      adminRoles: ["admin"],
+    }),
     phoneNumber({
       otpLength: AUTH_CONFIG.phone.otpLength,
       expiresIn: AUTH_CONFIG.phone.expiresIn,
@@ -185,13 +173,11 @@ export const auth = betterAuth({
           return;
         }
 
-        // Send OTP via Telegram bot (dev + production)
-        await sendTelegramMessage(
-          `🔐 <b>SkillConnect verification code</b>\n\n` +
-          `Your code: <b>${code}</b>\n\n` +
-          `📱 Phone: ${phoneNumber}\n` +
-          `⏱ Expires in 5 minutes.\n\n` +
-          `<i>If you didn't request this, ignore this message.</i>`
+        // No SMS dispatcher configured - log OTP for development
+        // In production, configure an SMS provider via setSmsDispatcher()
+        console.warn(
+          `[AUTH] OTP for ${phoneNumber}: ${code} ` +
+          `(configure SmsDispatcher via setSmsDispatcher() for production)`
         );
       },
       signUpOnVerification: {

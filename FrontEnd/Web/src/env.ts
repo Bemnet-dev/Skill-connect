@@ -91,6 +91,7 @@ export const env = createEnv({
       .default("https://localhost:5001/hubs/realtime"),
     NEXT_PUBLIC_MAPS_PROVIDER_KEY: z.string().optional(),
     NEXT_PUBLIC_DEFAULT_LOCALE: z.string().default("en"),
+    NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: z.string().default("skillconnect_dev_bot"),
   },
 
   /**
@@ -112,6 +113,7 @@ export const env = createEnv({
     NEXT_PUBLIC_SIGNALR_HUB_URL: process.env.NEXT_PUBLIC_SIGNALR_HUB_URL,
     NEXT_PUBLIC_MAPS_PROVIDER_KEY: process.env.NEXT_PUBLIC_MAPS_PROVIDER_KEY,
     NEXT_PUBLIC_DEFAULT_LOCALE: process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
+    NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME,
     DATABASE_URL: process.env.DATABASE_URL,
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,

@@ -48,8 +48,13 @@ export async function requestOtp(
 
   return {
     success: true,
+<<<<<<< HEAD
     ...(data || {}),
     message: data?.message || "Verification code sent to Telegram",
+=======
+    message: "Verification code sent to Telegram",
+    ...(data ? (({ message: _m, ...rest }) => rest)(data) : {}),
+>>>>>>> 26377ceb6b436ba7f4868f5bcb311c72f88518cf
   };
 }
 
@@ -83,6 +88,27 @@ export async function verifyOtp(
     user: data?.user ?? {},
     token,
   });
+
+  // Send "successfully logged in" message via Telegram (fire-and-forget)
+  try {
+    const userName = (data?.user as Record<string, unknown>)?.name || "User";
+    const role = (data?.user as Record<string, unknown>)?.role || "customer";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    
+    fetch(`${appUrl}/api/telegram/send-login-success`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phoneNumber: validated.phone,
+        userName,
+        role,
+      }),
+    }).catch((err) => {
+      console.error("[Auth] Failed to send login success Telegram message:", err);
+    });
+  } catch (err) {
+    console.error("[Auth] Failed to send login success Telegram message:", err);
+  }
 
   return session;
 }
