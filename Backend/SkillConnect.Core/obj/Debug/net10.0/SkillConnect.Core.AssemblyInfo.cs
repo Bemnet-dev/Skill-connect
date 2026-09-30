@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SkillConnect.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8c58fbb3bae3b2a538b09385b80b53277d4654df")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8e562ee7f812c2299ae45d87e6f86cfca64db613")]
 [assembly: System.Reflection.AssemblyProductAttribute("SkillConnect.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SkillConnect.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

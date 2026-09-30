@@ -13,16 +13,9 @@ import { verifyOtpSchema, type VerifyOtpInput } from "@/features/auth/schema";
 import { getRoleHomeRoute, getSafeCallbackUrl } from "@/middleware";
 
 /**
- * Verify OTP Page — /verify-otp
- *
- * Reads ?phone from the URL (set by the login page) and presents a 6-digit
- * code input. On success, redirects the user to their role home or the
- * callbackUrl that the middleware originally set before sending them to /login.
- *
- * Also provides a "resend code" path that re-fires useLogin() with the same
- * phone number, giving the user a fresh OTP without navigating away.
+ * Inner component that uses useSearchParams - must be wrapped in Suspense
  */
-export default function VerifyOtpPage() {
+function VerifyOtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -192,5 +185,23 @@ export default function VerifyOtpPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Verify OTP Page — /verify-otp
+ *
+ * Reads ?phone from the URL (set by the login page) and presents a 6-digit
+ * code input. On success, redirects the user to their role home or the
+ * callbackUrl that the middleware originally set before sending them to /login.
+ *
+ * Also provides a "resend code" path that re-fires useLogin() with the same
+ * phone number, giving the user a fresh OTP without navigating away.
+ */
+export default function VerifyOtpPage() {
+  return (
+    <React.Suspense fallback={<div className="bg-white rounded-2xl shadow-card border border-gray-200 px-8 py-10">Loading…</div>}>
+      <VerifyOtpContent />
+    </React.Suspense>
   );
 }

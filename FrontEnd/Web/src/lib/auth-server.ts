@@ -1,28 +1,64 @@
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
 import { phoneNumber } from "better-auth/plugins/phone-number";
+import { admin } from "better-auth/plugins/admin";
 import { Pool } from "pg";
 import { env } from "@/env";
+import { findTelegramChatIdForPhone } from "@/lib/telegram-server";
 
 /**
- * Sends a message to a Telegram chat via the Bot API.
- * Used as the OTP dispatcher — no extra packages needed, plain fetch.
+ * In-memory database store used for testing and mock adapter support.
  */
-async function sendTelegramMessage(text: string): Promise<void> {
-  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: env.TELEGRAM_CHAT_ID,
+export const memoryStore: Record<string, unknown[]> = {};
+
+/**
+ * Sends a message to a Telegram chat via the Bot API with timeout and retry.
+ * Dispatches to individual user's Telegram chat if registered, or falls back to admin chat.
+ */
+async function sendTelegramMessage(text: string, targetChatId?: string | number): Promise<void> {
+  await sendTelegramApiWithRetry(
+    `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      chat_id: String(targetChatId || env.TELEGRAM_CHAT_ID),
       text,
       parse_mode: "HTML",
-    }),
-  });
+    }
+  );
+}
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Telegram sendMessage failed (${res.status}): ${body}`);
+/**
+ * Makes a Telegram API call with timeout and retry logic to handle transient network errors.
+ */
+async function sendTelegramApiWithRetry(url: string, body: Record<string, unknown>, retries = 2): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`Telegram API error (${res.status}): ${errorBody}`);
+    }
+  } catch (err) {
+    clearTimeout(timeoutId);
+    
+    if (retries > 0 && (err instanceof TypeError || err instanceof DOMException)) {
+      // Retry on network errors (ECONNRESET, timeout, etc.)
+      console.warn(`Telegram API call failed, retrying... (${retries} retries left):`, err);
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // 1s delay before retry
+      return sendTelegramApiWithRetry(url, body, retries - 1);
+    }
+    
+    console.error(`Telegram API call failed after retries:`, err);
+    throw err;
   }
 }
 
@@ -176,6 +212,9 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    admin({
+      adminRoles: ["admin"],
+    }),
     phoneNumber({
       otpLength: AUTH_CONFIG.phone.otpLength,
       expiresIn: AUTH_CONFIG.phone.expiresIn,
@@ -185,13 +224,16 @@ export const auth = betterAuth({
           return;
         }
 
-        // Send OTP via Telegram bot (dev + production)
+        // Look up the user's personal Telegram chat ID (registered via bot).
+        // Falls back to the admin/broadcast chat if the user hasn't linked Telegram yet.
+        const userChatId = await findTelegramChatIdForPhone(phoneNumber).catch(() => null);
         await sendTelegramMessage(
           `🔐 <b>SkillConnect verification code</b>\n\n` +
           `Your code: <b>${code}</b>\n\n` +
           `📱 Phone: ${phoneNumber}\n` +
           `⏱ Expires in 5 minutes.\n\n` +
-          `<i>If you didn't request this, ignore this message.</i>`
+          `<i>If you didn't request this, ignore this message.</i>`,
+          userChatId ?? undefined
         );
       },
       signUpOnVerification: {

@@ -12,16 +12,9 @@ import { loginSchema, type LoginInput } from "@/features/auth/schema";
 import { getSafeCallbackUrl } from "@/middleware";
 
 /**
- * Login Page — /login
- *
- * Phone-only passwordless entry point.
- * Submits to useLogin() which calls requestOtp(), then redirects to
- * /verify-otp?phone=<encoded> so the OTP step has the number in the URL.
- *
- * The callbackUrl from the query string is forwarded to /verify-otp
- * so the final redirect after verification lands the user in the right place.
+ * Inner component that uses useSearchParams - must be wrapped in Suspense
  */
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -107,9 +100,18 @@ export default function LoginPage() {
             <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.88 13.65l-2.967-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.835.95l-.52-.041z" />
           </svg>
           <p className="text-xs text-blue-700 leading-relaxed">
-            <span className="font-semibold">OTP delivery via Telegram.</span>{" "}
-            Your verification code will be sent to the SkillConnect Telegram bot.
-            Check your Telegram after submitting.
+            <span className="font-semibold">OTP delivered via Telegram.</span>{" "}
+            If you&apos;ve registered with{" "}
+            <a
+              href="https://t.me/skillconnect_dev_bot?start=auth"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium hover:text-blue-900"
+            >
+              @skillconnect_dev_bot
+            </a>
+            , the code goes to <span className="font-medium">your personal chat</span>.
+            Otherwise it&apos;s sent to the admin channel.
           </p>
         </div>
       </form>
@@ -122,5 +124,23 @@ export default function LoginPage() {
         </span>
       </p>
     </div>
+  );
+}
+
+/**
+ * Login Page — /login
+ *
+ * Phone-only passwordless entry point.
+ * Submits to useLogin() which calls requestOtp(), then redirects to
+ * /verify-otp?phone=<encoded> so the OTP step has the number in the URL.
+ *
+ * The callbackUrl from the query string is forwarded to /verify-otp
+ * so the final redirect after verification lands the user in the right place.
+ */
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={<div className="bg-white rounded-2xl shadow-card border border-gray-200 px-8 py-10">Loading…</div>}>
+      <LoginContent />
+    </React.Suspense>
   );
 }
