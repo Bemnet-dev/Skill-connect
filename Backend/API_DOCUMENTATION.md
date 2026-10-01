@@ -8,7 +8,7 @@
 
 ## Authentication
 
-All endpoints except `/api/auth/health` and `/api/workers/search`, `/api/workers/{id}`, `/api/categories`, `/api/reviews/worker/{workerProfileId}` require a valid JWT token.
+All endpoints except `/api/auth/health`, `/api/workers/search`, `/api/workers/{id}`, `/api/categories`, and `/api/reviews/worker/{workerProfileId}` require a valid JWT token.
 
 ```
 Authorization: Bearer <your-jwt-token>
@@ -406,6 +406,66 @@ Both hubs require JWT authentication via `access_token` query parameter.
 
 ---
 
+### Telegram Bot
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/telegram/webhook` | None (Telegram) | Receive Telegram updates |
+| POST | `/api/telegram/set-webhook` | None | Set bot webhook URL |
+| POST | `/api/telegram/delete-webhook` | None | Delete bot webhook |
+| GET | `/api/telegram/webhook-info` | None | Get webhook info |
+| POST | `/api/telegram/send-otp` | Internal Secret | Send OTP via Telegram |
+
+#### POST /api/telegram/webhook
+Receives Telegram updates. Called by Telegram servers when users interact with the bot.
+
+#### POST /api/telegram/set-webhook
+Sets the webhook URL for the Telegram bot.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | string | Webhook URL to set |
+
+#### POST /api/telegram/delete-webhook
+Deletes the currently configured webhook.
+
+#### GET /api/telegram/webhook-info
+Returns information about the currently configured webhook.
+
+#### POST /api/telegram/send-otp
+Sends an OTP code to a Telegram user. Requires internal secret header.
+
+**Headers:**
+| Header | Required | Description |
+|--------|----------|-------------|
+| `x-internal-secret` | Yes | Internal API secret for authentication |
+
+**Request Body:**
+```json
+{
+  "telegramUserId": 123456789,
+  "code": "123456",
+  "language": "en"
+}
+```
+
+---
+
+## Frontend API Routes (Next.js)
+
+These routes are handled by the Next.js frontend server (port 3000) and are used internally by the auth flow.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/telegram/send-otp` | Internal Secret | Send OTP via Telegram |
+| POST | `/api/telegram/get-mapping` | Internal Secret | Get Telegram user mapping by phone |
+| POST | `/api/telegram/send-login-success` | Internal Secret | Send login success message via Telegram |
+
+All frontend Telegram routes require the `x-internal-secret` header for authentication.
+
+---
+
 ## Error Responses
 
 All errors follow RFC 7807 Problem Details format:
@@ -453,19 +513,79 @@ The API will be available at `http://localhost:5077`.
 
 ```
 Backend/
-├── SkillConnect.Api/           # ASP.NET Core Web API
-│   ├── Controllers/            # API Controllers
-│   ├── DTOs/                   # Data Transfer Objects
-│   ├── Hubs/                   # SignalR Hubs
-│   ├── Services/               # Business Logic Services
-│   ├── Extensions/             # DI Extensions
-│   ├── Middleware/             # Custom Middleware
-│   └── Properties/             # Launch Settings
-├── SkillConnect.Core/          # Domain Entities & Enums
-│   ├── Entities/               # Domain Models
-│   └── Enums/                  # Domain Enums
-├── SkillConnect.Infrastructure/# Data Access Layer
-│   ├── Persistence/            # EF Core DbContext & Configurations
-│   └── Migrations/             # Database Migrations
-└── API_DOCUMENTATION.md        # This file
+├── SkillConnect.Api/              # ASP.NET Core Web API
+│   ├── Controllers/               # 13 API Controllers
+│   │   ├── AuthController.cs
+│   │   ├── WorkersController.cs
+│   │   ├── CategoriesController.cs
+│   │   ├── JobRequestsController.cs
+│   │   ├── QuotesController.cs
+│   │   ├── BookingsController.cs
+│   │   ├── ReviewsController.cs
+│   │   ├── ChatController.cs
+│   │   ├── NotificationsController.cs
+│   │   ├── VerificationController.cs
+│   │   ├── DisputesController.cs
+│   │   ├── PaymentsController.cs
+│   │   └── TelegramWebhookController.cs
+│   ├── Services/                  # 12 Business Logic Services
+│   │   ├── WorkerService.cs
+│   │   ├── CategoryService.cs
+│   │   ├── JobRequestService.cs
+│   │   ├── QuoteService.cs
+│   │   ├── BookingService.cs
+│   │   ├── ReviewService.cs
+│   │   ├── ChatService.cs
+│   │   ├── NotificationService.cs
+│   │   ├── VerificationService.cs
+│   │   ├── DisputeService.cs
+│   │   ├── PaymentService.cs
+│   │   └── TelegramBotService.cs
+│   ├── Hubs/                      # SignalR Hubs
+│   │   ├── ChatHub.cs
+│   │   └── NotificationHub.cs
+│   ├── DTOs/                      # Data Transfer Objects
+│   ├── Extensions/                # DI Extensions
+│   ├── Middleware/                # Custom Middleware
+│   ├── Configuration/             # App Configuration
+│   └── Properties/                # Launch Settings
+├── SkillConnect.Core/             # Domain Layer
+│   ├── Entities/                  # 15 Domain Entities
+│   └── Enums/                     # 6 Domain Enums
+├── SkillConnect.Infrastructure/   # Data Access Layer
+│   ├── Persistence/               # EF Core DbContext & Configurations
+│   └── Migrations/                # Database Migrations
+└── API_DOCUMENTATION.md           # This file
 ```
+
+---
+
+## Telegram Bot Flow
+
+```
+User → Telegram Bot → Backend Webhook → TelegramBotService
+  │
+  ├─ /start → Language Selection (Amharic / English)
+  ├─ Language Selected → Role Selection (Client / Expert)
+  ├─ Role Selected → Store mapping (empty phone) → Request contact
+  ├─ Contact Shared → Normalize phone → Send OTP via Better Auth
+  │                    → Store mapping (with phone)
+  │
+  └─ Better Auth OTP Callback:
+       ├─ GET /api/telegram/get-mapping (find Telegram user by phone)
+       └─ POST /api/telegram/send-otp (deliver code via Telegram)
+```
+
+---
+
+## Recent Updates (October 2026)
+
+- Fixed duplicate DI registration for `ITelegramBotService`
+- Fixed role fallback logic in `TelegramBotService`
+- Added missing `/api/telegram/send-login-success` frontend route
+- Added null `From` guard in Telegram message handler
+- Secured all Telegram OTP endpoints with `x-internal-secret` header
+- Fixed DB pool leak in `get-mapping` and `send-login-success` routes
+- Moved secrets to environment variables in appsettings
+- Fixed `QuotesController.GetWorkerProfileId()` to use `IWorkerService`
+- Fixed `VerificationController` to look up worker profile by user ID

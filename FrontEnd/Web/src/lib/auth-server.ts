@@ -29,6 +29,8 @@ export const AUTH_CONFIG = {
 export type SmsDispatcher = (data: {
   phoneNumber: string;
   code: string;
+  language?: string;
+  telegramUserId?: number;
 }) => Promise<void> | void;
 
 let activeSmsDispatcher: SmsDispatcher | null = null;
@@ -39,6 +41,40 @@ let activeSmsDispatcher: SmsDispatcher | null = null;
  */
 export function setSmsDispatcher(dispatcher: SmsDispatcher | null) {
   activeSmsDispatcher = dispatcher;
+}
+
+/**
+ * Sends OTP via Telegram by calling the frontend API endpoint
+ */
+export async function sendOtpViaTelegram(
+  phoneNumber: string,
+  code: string,
+  language: string = "en",
+  telegramUserId?: number
+): Promise<void> {
+  try {
+    const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const response = await fetch(`${appUrl}/api/telegram/send-otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": env.INTERNAL_REVALIDATE_SECRET,
+      },
+      body: JSON.stringify({
+        phoneNumber,
+        code,
+        language,
+        telegramUserId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("[AUTH] Failed to send OTP via Telegram:", error);
+    }
+  } catch (error) {
+    console.error("[AUTH] Error sending OTP via Telegram:", error);
+  }
 }
 
 /**
@@ -170,15 +206,37 @@ export const auth = betterAuth({
       sendOTP: async ({ phoneNumber, code }) => {
         if (activeSmsDispatcher) {
           await activeSmsDispatcher({ phoneNumber, code });
-          return;
         }
 
-        // No SMS dispatcher configured - log OTP for development
-        // In production, configure an SMS provider via setSmsDispatcher()
+        // Always log OTP for development
         console.warn(
           `[AUTH] OTP for ${phoneNumber}: ${code} ` +
           `(configure SmsDispatcher via setSmsDispatcher() for production)`
         );
+
+        // Try to send via Telegram if user has linked their account
+        // We need to find the telegram user ID from the phone number
+        try {
+          // Check if there's a telegram user mapping for this phone number
+          const appUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+          const mappingResponse = await fetch(`${appUrl}/api/telegram/get-mapping`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-internal-secret": env.INTERNAL_REVALIDATE_SECRET,
+            },
+            body: JSON.stringify({ phoneNumber }),
+          });
+
+          if (mappingResponse.ok) {
+            const mapping = await mappingResponse.json();
+            if (mapping.telegramUserId) {
+              await sendOtpViaTelegram(phoneNumber, code, mapping.language || "en", mapping.telegramUserId);
+            }
+          }
+        } catch (error) {
+          console.error("[AUTH] Error checking Telegram mapping:", error);
+        }
       },
       signUpOnVerification: {
         getTempEmail: (phone: string) =>

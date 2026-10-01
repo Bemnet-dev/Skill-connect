@@ -48,13 +48,8 @@ export async function requestOtp(
 
   return {
     success: true,
-<<<<<<< HEAD
-    ...(data || {}),
-    message: data?.message || "Verification code sent to Telegram",
-=======
     message: "Verification code sent to Telegram",
     ...(data ? (({ message: _m, ...rest }) => rest)(data) : {}),
->>>>>>> 26377ceb6b436ba7f4868f5bcb311c72f88518cf
   };
 }
 
@@ -97,7 +92,10 @@ export async function verifyOtp(
     
     fetch(`${appUrl}/api/telegram/send-login-success`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.INTERNAL_REVALIDATE_SECRET || "",
+      },
       body: JSON.stringify({
         phoneNumber: validated.phone,
         userName,

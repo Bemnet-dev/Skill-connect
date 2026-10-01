@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using SkillConnect.Api.Configuration;
 using SkillConnect.Api.Hubs;
 using SkillConnect.Api.Services;
 using SkillConnect.Infrastructure.Persistence;
@@ -22,6 +24,17 @@ public static class ServiceExtensions
             options.UseNpgsql(
                 configuration.GetConnectionString("DefaultConnection"),
                 npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
+
+        // Configuration
+        services.Configure<TelegramBotOptions>(configuration.GetSection(TelegramBotOptions.SectionName));
+
+        // HTTP Client for Telegram Bot
+        services.AddHttpClient<ITelegramBotService, TelegramBotService>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<TelegramBotOptions>>().Value;
+            client.BaseAddress = new Uri($"https://api.telegram.org/bot{options.BotToken}/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
 
         // Services
         services.AddScoped<IWorkerService, WorkerService>();

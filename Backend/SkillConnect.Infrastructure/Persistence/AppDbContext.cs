@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<VerificationSubmission> VerificationSubmissions => Set<VerificationSubmission>();
     public DbSet<Dispute> Disputes => Set<Dispute>();
     public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+    public DbSet<TelegramUserMapping> TelegramUserMappings => Set<TelegramUserMapping>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

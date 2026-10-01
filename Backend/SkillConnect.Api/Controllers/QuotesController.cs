@@ -9,7 +9,7 @@ namespace SkillConnect.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class QuotesController(IQuoteService quoteService) : ControllerBase
+public class QuotesController(IQuoteService quoteService, IWorkerService workerService) : ControllerBase
 {
     /// <summary>
     /// Submit a quote for a job request.
@@ -80,9 +80,8 @@ public class QuotesController(IQuoteService quoteService) : ControllerBase
         if (string.IsNullOrEmpty(userId))
             return null;
 
-        // This would typically come from a worker service; simplified here
-        // In production, cache this lookup
-        return null; // Placeholder — implement with IWorkerService
+        var worker = await workerService.GetByUserIdAsync(userId);
+        return worker?.Id;
     }
 }
 

@@ -9,7 +9,7 @@ namespace SkillConnect.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class VerificationController(IVerificationService verificationService) : ControllerBase
+public class VerificationController(IVerificationService verificationService, IWorkerService workerService) : ControllerBase
 {
     /// <summary>
     /// Submit a verification document.
@@ -24,8 +24,11 @@ public class VerificationController(IVerificationService verificationService) : 
             return Unauthorized();
 
         // Get worker profile ID for this user
-        // In production, this would be cached or looked up efficiently
-        var workerProfileId = 1; // Placeholder — implement proper lookup
+        var worker = await workerService.GetByUserIdAsync(userId);
+        if (worker is null)
+            return NotFound("Worker profile not found for this user.");
+
+        var workerProfileId = worker.Id;
 
         var submission = await verificationService.SubmitAsync(workerProfileId, request, ct);
         return CreatedAtAction(nameof(GetByWorker), new { workerProfileId }, submission);
