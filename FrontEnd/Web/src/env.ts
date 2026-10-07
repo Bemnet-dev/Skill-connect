@@ -72,10 +72,12 @@ export const env = createEnv({
     // Telegram OTP dispatcher
     TELEGRAM_BOT_TOKEN: z
       .string()
-      .min(1, "TELEGRAM_BOT_TOKEN is required"),
+      .min(1, "TELEGRAM_BOT_TOKEN is required")
+      .optional(),
     TELEGRAM_CHAT_ID: z
       .string()
-      .min(1, "TELEGRAM_CHAT_ID is required"),
+      .min(1, "TELEGRAM_CHAT_ID is required")
+      .optional(),
   },
 
   /**

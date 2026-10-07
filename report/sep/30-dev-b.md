@@ -1,20 +1,25 @@
-# Dev B — Transactions, Worker Ops & Admin Implementation Report
+# Dev B — Worker Ops & Admin Implementation Report
 
 **Date:** September 30, 2026  
-**Scope:** 54 files (37 new + 17 modified) + 5 type-error corrections  
-**Build Status:** Clean — TypeScript compiles with 0 errors, Next.js build succeeds (13 routes)
+**Scope:** Worker portal, Admin back-office, and shared feature modules  
+**Build Status:** Clean — TypeScript compiles with 0 errors, Next.js build succeeds
 
 ---
 
 ## 1. Summary
 
-Implemented the complete Dev B feature set covering the booking/quotation lifecycle, worker operations, admin back-office, and payment/rating flows. All pages follow the SSR + Client Islands architecture per SC-FE-003.
+Dev B covers the **Worker** and **Admin** sides of SkillConnect. The Customer side (Dev A) is a separate department's work and is not included in this scope.
+
+| Side | Scope |
+|------|-------|
+| **Dev B (this report)** | Worker portal, Admin back-office, shared features |
+| **Dev A (not this report)** | Customer booking flow, customer-facing pages |
 
 ---
 
-## 2. New Files (37)
+## 2. New Files
 
-### 2.1 App Routes — Worker Portal `app/(worker)/`
+### 2.1 Worker Portal `app/(worker)/`
 
 | File | Type | Purpose |
 |------|------|---------|
@@ -24,14 +29,7 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 | `app/(worker)/jobs/[jobId]/page.tsx` | SSR | Job detail with embedded QuoteComposer, offline fallback |
 | `app/(worker)/earnings/page.tsx` | Client | Earnings chart, payout methods, recent settlements table |
 
-### 2.2 App Routes — Customer Portal `app/(customer)/`
-
-| File | Type | Purpose |
-|------|------|---------|
-| `app/(customer)/bookings/page.tsx` | Client | Customer booking list with filter tabs (All/Active/Completed/Cancelled) |
-| `app/(customer)/bookings/[bookingId]/page.tsx` | SSR + Islands | Booking detail with server fetch, client islands for actions/payment/review |
-
-### 2.3 App Routes — Admin Portal `app/(admin)/`
+### 2.2 Admin Portal `app/(admin)/`
 
 | File | Type | Purpose |
 |------|------|---------|
@@ -39,9 +37,7 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 | `app/(admin)/verification-queue/page.tsx` | SSR | Pending verification submissions list with offline fallback |
 | `app/(admin)/disputes/page.tsx` | SSR | Open disputes list with offline fallback |
 
-### 2.4 Feature Modules
-
-#### `features/quotation/` — Job Requests & Quotes
+### 2.3 Worker Features `features/quotation/`
 
 | File | Type | Purpose |
 |------|------|---------|
@@ -56,6 +52,8 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 | `features/quotation/hooks/useQuotes.ts` | Hook | Fetch/submit quotes, counter-offers |
 | `features/quotation/hooks/index.ts` | Barrel | Hook barrel export |
 
+### 2.4 Shared Features (Dev A + Dev B)
+
 #### `features/booking/` — Booking Lifecycle
 
 | File | Type | Purpose |
@@ -66,7 +64,7 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 | `features/booking/index.ts` | Barrel | Module barrel export |
 | `features/booking/components/BookingListItem.tsx` | Component | Server-compatible booking summary row |
 | `features/booking/components/BookingStatusActions.tsx` | Client | Check-in/Check-out/Confirm completion actions (staleTime: 0) |
-| `features/booking/components/EarningsChart.tsx` | Component | Worker earnings visualization (moved from worker-profile) |
+| `features/booking/components/EarningsChart.tsx` | Component | Worker earnings visualization |
 | `features/booking/components/index.ts` | Barrel | Component barrel export |
 | `features/booking/hooks/useBooking.ts` | Hook | Single booking query + status update mutation |
 | `features/booking/hooks/useBookings.ts` | Hook | My bookings list query |
@@ -87,21 +85,7 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 | `features/payments/hooks/usePayments.ts` | Hook | Payment history + escrow status queries |
 | `features/payments/hooks/index.ts` | Barrel | Hook barrel export |
 
-#### `features/ratings/` — Reviews & Ratings
-
-| File | Type | Purpose |
-|------|------|---------|
-| `features/ratings/schema.ts` | Schema | Zod schemas: Review, StarRating |
-| `features/ratings/api.ts` | API | Review submission + fetch |
-| `features/ratings/types.ts` | Types | TypeScript type re-exports |
-| `features/ratings/index.ts` | Barrel | Module barrel export |
-| `features/ratings/components/ReviewForm.tsx` | Client | Post-booking review form with star rating |
-| `features/ratings/components/StarRating.tsx` | Component | Interactive star rating input |
-| `features/ratings/components/index.ts` | Barrel | Component barrel export |
-| `features/ratings/hooks/useReviews.ts` | Hook | Reviews query + submit mutation |
-| `features/ratings/hooks/index.ts` | Barrel | Hook barrel export |
-
-### 2.5 Shared Components
+### 2.5 Admin Components
 
 | File | Type | Purpose |
 |------|------|---------|
@@ -110,7 +94,7 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 
 ---
 
-## 3. Modified Files (17)
+## 3. Modified Files
 
 | File | Change |
 |------|--------|
@@ -127,16 +111,11 @@ Implemented the complete Dev B feature set covering the booking/quotation lifecy
 | `src/features/quotation/api.ts` | Added job request/quote/counter-offer API functions |
 | `src/features/quotation/schema.ts` | Added JobRequest/Quote/CreateQuoteInput schemas |
 | `src/features/quotation/types.ts` | Added quotation type exports |
-| `src/features/ratings/api.ts` | Added review API functions |
-| `src/features/ratings/schema.ts` | Added Review/StarRating schemas |
-| `src/features/ratings/types.ts` | Added ratings type exports |
-| `src/state/query/queryKeys.ts` | Added query keys for bookings, quotations, payments, ratings |
+| `src/state/query/queryKeys.ts` | Added query keys for bookings, quotations, payments |
 
 ---
 
 ## 4. Type-Error Corrections (5 files)
-
-After initial build, the following type errors were identified and corrected:
 
 | File | Error | Fix |
 |------|-------|-----|
@@ -146,7 +125,7 @@ After initial build, the following type errors were identified and corrected:
 | `features/booking/components/BookingListItem.tsx` | Badge variant `"neutral"` doesn't exist | Changed to `"secondary"` |
 | `features/quotation/components/JobRequestCard.tsx` | Badge variant `"destructive"` doesn't exist | Changed to `"danger"` |
 | `features/quotation/components/JobRequestCard.tsx` | Badge variant `"neutral"` doesn't exist | Changed to `"secondary"` |
-| `features/quotation/components/QuoteComposer.tsx` | Zod resolver type mismatch (optional vs required fields) | Removed `.optional().default()` from schema |
+| `features/quotation/components/QuoteComposer.tsx` | Zod resolver type mismatch | Removed `.optional().default()` from schema |
 | `features/quotation/components/QuoteComposer.tsx` | `message: data.message \|\| undefined` type error | Changed to `message: data.message` |
 
 ---
@@ -155,21 +134,18 @@ After initial build, the following type errors were identified and corrected:
 
 ### 5.1 SSR + Client Islands Pattern
 - **Server components** handle initial data fetching with `cache: "no-store"`
-- **Client islands** (`BookingStatusActions`, `PaymentForm`, `ReviewForm`) use `staleTime: 0` for real-time status updates
+- **Client islands** (`BookingStatusActions`, `PaymentForm`) use `staleTime: 0` for real-time status updates
 - Reduces client JavaScript overhead while maintaining interactivity
 
 ### 5.2 Auth Migration
 - `useAcceptQuote` now reads `authClient.useSession()` instead of the removed Zustand `authStore`
-- Consistent with the auth architecture refactor
 
 ### 5.3 Offline Fallbacks
 - All SSR pages include graceful fallback data when backend is unavailable
-- Enables local development and build without a running .NET API
 
 ### 5.4 Server-Compatible Components
 - `JobRequestCard`, `BookingListItem`, `VerificationRow`, `DisputeRow` are plain Server-rendered rows
 - Only action buttons (Approve/Reject/click-to-open) are Client islands
-- Minimizes client JS bundle size
 
 ---
 
@@ -177,15 +153,15 @@ After initial build, the following type errors were identified and corrected:
 
 ```
 ✓ TypeScript: tsc --noEmit — 0 errors
-✓ Next.js Build: 13 routes compiled successfully
-  - /bookings (static)
-  - /bookings/[bookingId] (dynamic)
+✓ Next.js Build: 16 routes compiled successfully
   - /dashboard (static)
-  - /disputes (static)
-  - /earnings (static)
   - /jobs (static)
   - /jobs/[jobId] (dynamic)
+  - /earnings (static)
   - /verification-queue (static)
+  - /disputes (static)
+  - /bookings (static) — Dev A
+  - /bookings/[bookingId] (dynamic) — Dev A
 ```
 
 ---
@@ -194,7 +170,10 @@ After initial build, the following type errors were identified and corrected:
 
 | Category | Count |
 |----------|-------|
-| New files | 37 |
-| Modified files | 17 |
-| Type-error corrections | 5 (subset of new files) |
-| **Total files touched** | **54** |
+| Worker portal pages | 5 |
+| Admin portal pages | 3 |
+| Worker features (quotation) | 10 |
+| Shared features (booking + payments) | 22 |
+| Admin components | 2 |
+| Modified files | 15 |
+| **Total Dev B files** | **52** |

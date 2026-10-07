@@ -3,6 +3,10 @@ import { Inter } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
+interface RootLayoutProps {
+  children: React.ReactNode;
+}
+
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
@@ -15,7 +19,7 @@ export const metadata: Metadata = {
     "Find a job that suits your interest and skills. Browse thousands of opportunities from top companies.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
